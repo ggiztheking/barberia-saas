@@ -5,7 +5,7 @@ app.use(express.json());
 app.set('trust proxy', 1);
 app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' }); n(); });
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
-app.use(express.static('public', { maxAge: '5m' }));
+app.use(express.static('public', { maxAge: 0, etag: true }));
 app.get('/health', (q, s) => s.send('ok'));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const BARBEROS = (process.env.BARBEROS || 'Barbero 1,Barbero 2').split(',').map(s => s.trim());
