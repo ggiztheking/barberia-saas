@@ -1,0 +1,33 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Agenda de barbería</title>
+<style>
+:root{--bg:#f3efe8;--ink:#1d2b2a;--accent:#b4452c;--card:#fff;--line:#d9d2c5}
+@media(prefers-color-scheme:dark){:root{--bg:#16201f;--ink:#efe9dd;--card:#1f2c2b;--line:#34443f}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 Georgia,serif;background:var(--bg);color:var(--ink);padding:16px;max-width:560px;margin:auto}
+h1{font-size:26px;margin:8px 0 16px}h2{font-size:18px;margin:24px 0 8px}
+input,select,button{font:inherit;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);width:100%;margin-bottom:8px}
+button{background:var(--accent);color:#fff;border:0;cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cita{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:8px}
+.cita small{opacity:.7}.acc{display:flex;gap:8px}.acc button{margin:6px 0 0;padding:6px;font-size:14px}.acc .no{background:#555}
+</style></head><body>
+<h1>Agenda de barbería</h1>
+<input type="date" id="dia">
+<h2>Nueva cita</h2>
+<input id="cliente" placeholder="Nombre del cliente"><input id="telefono" placeholder="WhatsApp" inputmode="tel">
+<div class="row"><input id="barbero" placeholder="Barbero"><input id="hora" type="time"></div>
+<div class="row"><select id="servicio"><option>Corte</option><option>Corte y barba</option><option>Barba</option></select><input id="precio" type="number" placeholder="Precio $"></div>
+<button onclick="guardar()">Guardar cita</button>
+<h2>Citas del día</h2><div id="lista"></div>
+<h2>Corte de caja</h2><div id="corte"></div>
+<script>
+const $=id=>document.getElementById(id);$('dia').value=new Date().toISOString().slice(0,10);$('dia').onchange=cargar;
+const j=(u,o)=>fetch(u,o&&{method:o.m,headers:{'Content-Type':'application/json'},body:JSON.stringify(o.b)}).then(r=>r.json());
+async function guardar(){const b={};['cliente','telefono','barbero','hora','servicio','precio'].forEach(k=>b[k]=$(k).value);b.fecha=$('dia').value;
+if(!b.cliente||!b.barbero||!b.hora)return alert('Faltan cliente, barbero u hora');await j('/api/citas',{m:'POST',b});$('cliente').value=$('telefono').value='';cargar()}
+async function estado(id,e){await j('/api/citas/'+id,{m:'PATCH',b:{estado:e}});cargar()}
+async function cargar(){const f=$('dia').value;const c=await j('/api/citas?fecha='+f);
+$('lista').innerHTML=c.length?c.map(x=>`<div class="cita"><b>${x.hora}</b> ${x.cliente} <small>· ${x.servicio} con ${x.barbero} · $${x.precio} · ${x.estado}</small>
+<div class="acc"><button onclick="estado(${x.id},'completada')">Completada</button><button class="no" onclick="estado(${x.id},'cancelada')">Cancelar</button></div></div>`).join(''):'<p>Sin citas este día. Agrega la primera arriba.</p>';
+const t=await j('/api/corte?fecha='+f);$('corte').innerHTML=t.length?t.map(x=>`<div class="cita">${x.barbero}: ${x.cortes} cortes · $${x.total}</div>`).join(''):'<p>Aún no hay citas completadas.</p>'}
+cargar();
+</script></body></html>
