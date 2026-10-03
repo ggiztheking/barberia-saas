@@ -1,0 +1,31 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Administrador</title><link rel="stylesheet" href="/s.css?v=3"></head><body>
+<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a></nav></header><main>
+<div class="acc" style="margin-bottom:10px"><button onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
+<h2>Citas del día</h2><div id="lista"></div><h2 style="margin-top:24px">Corte de caja</h2><div id="corte"></div>
+<h2 style="margin-top:24px">Precios</h2><div id="cat"></div>
+<h2 style="margin-top:24px">Mi barbería</h2><div id="aj"></div></main>
+<script>
+const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+$('#lp').href='/'+N;$('#la').href='/'+N+'/agenda';
+let K=sessionStorage['k_'+N]||prompt('Contraseña de administrador');
+const J=async(u,b,mt)=>{const r=await fetch('/api/'+N+u,{method:mt||(b?'PATCH':'GET'),headers:{'Content-Type':'application/json','x-admin':K},body:b&&JSON.stringify(b)});
+if(r.status===401||r.status===429){sessionStorage.removeItem('k_'+N);document.body.innerHTML='<main><h2>'+(r.status===429?'Demasiados intentos':'Contraseña incorrecta')+'</h2><p>Recarga la página para intentar de nuevo.</p></main>';throw 0}
+const d=await r.json();if(!r.ok)throw new Error(d.error);sessionStorage['k_'+N]=K;return d};
+const hoy=()=>new Date().toLocaleDateString('en-CA');$('#dia').value=hoy();$('#dia').onchange=cargar;
+function mover(n){const d=new Date($('#dia').value+'T12:00');n?d.setDate(d.getDate()+n):d.setTime(Date.now());$('#dia').value=d.toLocaleDateString('en-CA');cargar()}
+const est=async(id,e)=>{await J('/admin/citas/'+id,{estado:e});cargar()};
+const wa=x=>{let d=String(x.telefono).replace(/\D/g,'');if(d.length===10)d='52'+d;
+return 'https://wa.me/'+d+'?text='+encodeURIComponent(`Hola ${x.cliente}, te recordamos tu cita el ${$('#dia').value} a las ${x.hora} (${x.servicio} con ${x.barbero}). ¡Te esperamos!`)};
+async function cargar(){const f=$('#dia').value,c=await J('/admin/citas?fecha='+f);
+$('#lista').innerHTML=c.length?c.map(x=>`<div class="card"><b>${esc(x.hora)}</b> ${esc(x.cliente)} <p>${esc(x.servicio)} con ${esc(x.barbero)} · $${Number(x.precio)} · ${esc(x.estado)} · <a style="color:var(--gold)" href="${esc(wa(x))}">Recordar por WhatsApp</a></p>
+<div class="acc"><button onclick="est(${Number(x.id)},'completada')">Completada</button><button onclick="est(${Number(x.id)},'cancelada')">Cancelar</button></div></div>`).join(''):'<p>Sin citas este día.</p>';
+const t=await J('/admin/corte?fecha='+f);$('#corte').innerHTML=t.length?t.map(x=>`<div class="card">${esc(x.barbero)}: ${x.cortes} cortes · $${x.total}</div>`).join('')+`<p><b>Total del día: $${t.reduce((a,x)=>a+x.total,0)}</b></p>`:'<p>Aún no hay citas completadas.</p>'}
+async function catalogo(){const c=await J('/admin/catalogo');
+$('#cat').innerHTML=[['estilos','Servicios',c.estilos],['productos','Productos',c.productos]].map(([t,n,r])=>`<h3>${n}</h3>`+r.map(x=>`<div class="acc" style="align-items:center;margin-bottom:6px"><span style="flex:1">${esc(x.nombre)}</span><input type="number" min="0" value="${Number(x.precio)}" style="width:90px;margin:0" id="p-${t}-${Number(x.id)}" aria-label="Precio de ${esc(x.nombre)}"><button style="margin:0" onclick="precio('${t}',${Number(x.id)})">Guardar</button></div>`).join('')).join('')}
+async function precio(t,id){const v=$(`#p-${t}-${id}`).value;if(v==='')return;await J('/admin/precio',{tabla:t,id,precio:Number(v)});alert('Precio guardado')}
+const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
+async function ajustes(){const a=await J('/admin/ajustes');$('#aj').innerHTML=CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+'<button onclick="guardaAj()">Guardar cambios</button>'}
+async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);try{await J('/admin/ajustes',b);alert('Cambios guardados')}catch(e){alert(e.message)}}
+cargar();catalogo();ajustes();
+</script></body></html>

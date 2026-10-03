@@ -1,0 +1,19 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crear mi barbería</title><meta name="theme-color" content="#07090f"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=3"></head><body>
+<header><a class="logo" href="/" style="text-decoration:none">AGENDA DE BARBERÍAS</a></header><main>
+<h2>Crea tu barbería</h2><p>En un minuto tendrás tu página, tu agenda y tu panel de administrador.</p>
+<label for="n">Nombre de tu barbería</label><input id="n" placeholder="Ej. Onyx Barbería" autocomplete="organization">
+<label for="s">Tu enlace</label><input id="s" placeholder="mi-barberia" autocapitalize="none" spellcheck="false"><p id="pv"></p>
+<label for="w">WhatsApp (10 dígitos)</label><input id="w" inputmode="tel" placeholder="999 123 4567">
+<label for="p">Contraseña del panel (mínimo 8 caracteres)</label><input id="p" type="password" autocomplete="new-password">
+<button id="go">Crear mi barbería</button><div id="res" role="status"></div></main>
+<script>
+const $=s=>document.querySelector(s);let manual=false;
+const slug=t=>t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30);
+$('#n').oninput=()=>{if(!manual)$('#s').value=slug($('#n').value);pv()};$('#s').oninput=()=>{manual=true;$('#s').value=slug($('#s').value);pv()};
+const pv=()=>$('#pv').textContent=$('#s').value?location.host+'/'+$('#s').value:'';
+$('#go').onclick=async()=>{const r=$('#res');r.className='msg';r.textContent='';
+try{const x=await fetch('/api/registro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:$('#n').value,slug:$('#s').value,whatsapp:$('#w').value,password:$('#p').value})}),d=await x.json();if(!x.ok)throw new Error(d.error);
+r.className='msg ok';r.innerHTML='<b>¡Listo! Tu barbería ya existe.</b><p>Guarda tu contraseña; es la única forma de entrar a tu panel.</p><a class="btn" href="/'+d.slug+'/admin">Entrar a mi panel</a> <a class="btn alt" href="/'+d.slug+'">Ver mi página</a>'}
+catch(e){r.textContent=e.message}};
+</script></body></html>
