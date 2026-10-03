@@ -1,0 +1,18 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Onyx · Admin</title><link rel="stylesheet" href="s.css"></head><body>
+<header><span class="logo">ONYX · ADMIN</span></header><main>
+<input type="date" id="dia"><h2>Citas del día</h2><div id="lista"></div><h2 style="margin-top:24px">Corte de caja</h2><div id="corte"></div></main>
+<script>
+const $=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let K=sessionStorage.k||prompt('Contraseña de administrador');
+const J=async(u,b)=>{const r=await fetch(u,{method:b?'PATCH':'GET',headers:{'Content-Type':'application/json','x-admin':K},body:b&&JSON.stringify(b)});
+if(r.status===401){sessionStorage.removeItem('k');document.body.innerHTML='<main><h2>Contraseña incorrecta</h2><p>Recarga la página para intentar de nuevo.</p></main>';throw 0}
+sessionStorage.k=K;return r.json()};
+$('#dia').value=new Date().toISOString().slice(0,10);$('#dia').onchange=cargar;
+const est=async(id,e)=>{await J('/api/admin/citas/'+id,{estado:e});cargar()};
+async function cargar(){const f=$('#dia').value,c=await J('/api/admin/citas?fecha='+f);
+$('#lista').innerHTML=c.length?c.map(x=>`<div class="card" style="margin-bottom:8px"><b>${esc(x.hora)}</b> ${esc(x.cliente)} <p>${esc(x.servicio)} con ${esc(x.barbero)} · $${Number(x.precio)} · ${esc(x.estado)} · <a style="color:var(--gold)" href="https://wa.me/52${encodeURIComponent(String(x.telefono).replace(/\D/g,''))}">WhatsApp</a></p>
+<div class="acc"><button onclick="est(${Number(x.id)},'completada')">Completada</button><button onclick="est(${Number(x.id)},'cancelada')">Cancelar</button></div></div>`).join(''):'<p>Sin citas este día.</p>';
+const t=await J('/api/admin/corte?fecha='+f);$('#corte').innerHTML=t.length?t.map(x=>`<div class="card" style="margin-bottom:8px">${esc(x.barbero)}: ${x.cortes} cortes · $${x.total}</div>`).join(''):'<p>Aún no hay citas completadas.</p>'}
+cargar();
+</script></body></html>

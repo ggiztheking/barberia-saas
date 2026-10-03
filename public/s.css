@@ -1,0 +1,16 @@
+:root{--bg:#090d1c;--panel:#111a38;--ink:#f3efe4;--dim:#a9b0c8;--gold:#c9a24b;--line:#27335e}
+*{box-sizing:border-box}body{margin:0;font:16px/1.55 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+h1,h2,h3,.logo{font-family:'Playfair Display',Georgia,serif;margin:0}
+header{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.logo{font-size:26px;letter-spacing:.14em;color:var(--gold)}nav{display:flex;gap:16px}
+nav a{color:var(--dim);text-decoration:none;padding:6px 0;border-bottom:2px solid transparent}nav a[aria-current=true]{color:var(--ink);border-color:var(--gold)}
+main{max-width:760px;margin:auto;padding:22px 18px 60px}section[hidden]{display:none}
+h1{font-size:40px;line-height:1.1;margin:30px 0 12px}h2{font-size:26px;margin:0 0 14px}p{color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:14px}.card h3{font-size:18px}.card p{margin:6px 0}.card b{color:var(--gold)}
+input,select,button{font:inherit;padding:11px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);width:100%;margin-bottom:10px}
+button,.btn{background:var(--gold);color:#1a1405;border:0;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;width:auto;padding:11px 20px}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.chips button{width:auto;margin:0;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:400;padding:8px 14px}
+.chips button[aria-pressed=true]{background:var(--gold);color:#1a1405;border-color:var(--gold)}.chips button:disabled{opacity:.35;text-decoration:line-through;cursor:not-allowed}
+.msg{padding:12px;border-radius:4px;margin-top:10px;border:1px solid var(--line)}.ok{border-color:var(--gold)}.acc{display:flex;gap:8px}.acc button{margin:6px 0 0;padding:6px 12px;font-size:14px}
