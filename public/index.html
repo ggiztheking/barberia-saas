@@ -1,55 +1,32 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Onyx Barbería · Mérida</title><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&display=swap" rel="stylesheet"><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#090d1c"><link rel="apple-touch-icon" href="icon-192.png"><link rel="stylesheet" href="s.css"></head><body>
-<header><span class="logo">ONYX</span><nav><a href="#inicio">Inicio</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#agendar">Agendar</a><a href="#mis">Mis citas</a></nav></header>
-<main>
-<section id="inicio"><h1>Estilo internacional, en Mérida.</h1><p>Cortes clásicos y las tendencias más nuevas. Elige tu estilo, tu barbero y tu hora.</p><a class="btn" href="#agendar">Agendar mi cita</a><p>Corte $200 · Corte y barba $350 MXN</p>
-<div class="hero"><img src="img/hero.jpg" alt="Interior de Onyx Barbería con luces hexagonales y silla VIP"></div>
-<h2 style="margin-top:28px">El local</h2><div class="gal"><img loading="lazy" src="img/techo.jpg" alt="Luces hexagonales y logo en la pared"><img loading="lazy" src="img/vip.jpg" alt="Silla VIP"><img loading="lazy" src="img/recepcion.jpg" alt="Recepción y estación de trabajo"><img loading="lazy" src="img/bienvenido.jpg" alt="Entrada con tapete de bienvenida"></div></section>
-<section id="estilos" hidden><h2>Estilos de corte</h2><div class="chips" id="filtros"></div><div class="grid" id="eg"></div></section>
-<section id="productos" hidden><h2>Productos</h2><div class="grid" id="pg"></div></section>
-<section id="agendar" hidden><h2>Agenda tu cita</h2>
-<label for="srv">Servicio</label><select id="srv"></select>
-<label for="bar">Barbero</label><select id="bar"></select>
-<label for="dia">Fecha</label><input type="date" id="dia">
-<p id="hl">Elige barbero y fecha para ver horarios.</p><div class="chips" id="horas"></div>
-<input id="nom" placeholder="Tu nombre" autocomplete="name"><input id="tel" placeholder="Tu WhatsApp" inputmode="tel" autocomplete="tel">
-<button id="go">Confirmar cita</button><div id="res" role="status"></div></section>
-<section id="mis" hidden><h2>Mis citas</h2><div id="mlist"></div></section>
-</main>
-<footer style="max-width:760px;margin:auto;padding:0 18px 40px;color:var(--dim)">Onyx Barbería · Fracc. Los Héroes, Mérida, Yucatán · <a style="color:var(--gold)" href="https://www.google.com/maps/search/?api=1&query=Onyx+Barber%C3%ADa+Fracc+Los+H%C3%A9roes+M%C3%A9rida+Yucat%C3%A1n">Cómo llegar</a></footer>
-<a class="btn fab" href="#agendar">Agendar</a>
+<title>Onyx Barbería · Fracc. Los Héroes, Mérida</title>
+<meta name="description" content="Barbería en Fracc. Los Héroes, Mérida, Yucatán. Cortes clásicos y las tendencias más nuevas. Corte desde $200. Agenda tu cita en línea.">
+<meta property="og:title" content="Onyx Barbería · Mérida"><meta property="og:description" content="Estilo internacional. Agenda tu cita en línea."><meta property="og:image" content="/img/hero.jpg">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#090d1c"><link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="s.css">
+<style>
+.hero{min-height:88vh;display:flex;align-items:flex-end;background:linear-gradient(180deg,#090d1c26 25%,#090d1cf5 94%),url(img/hero.jpg) center 30%/cover}
+.hero div,.b{max-width:760px;margin:auto;width:100%;padding:0 18px}.hero div{padding-bottom:48px}
+.hero h1{font-size:clamp(38px,9vw,66px);line-height:1.04;margin:0 0 14px}.hero p{color:var(--ink);max-width:30em}
+.b{padding-top:52px}.b h3{font-size:19px;color:var(--gold);margin:22px 0 4px}.menu ul{list-style:none;margin:0;padding:0}
+.menu li{display:flex;gap:10px;align-items:baseline;padding:7px 0}.menu li i{flex:1;border-bottom:1px dotted var(--line)}.menu li b{color:var(--gold)}
+.hexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px;margin-top:6px}
+.hexs img{width:100%;aspect-ratio:1/.9;object-fit:cover;display:block;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+.cta{margin-top:56px;padding:44px 18px;text-align:center;background:var(--panel);border-top:1px solid var(--line)}
+footer{padding:22px 18px 40px;text-align:center;color:var(--dim)}
+</style></head><body>
+<header><a class="logo" href="/" style="text-decoration:none">ONYX</a><nav><a href="#servicios">Servicios</a><a href="#local">El local</a><a href="#ubicacion">Ubicación</a></nav><a class="btn" href="agenda.html">Agendar</a></header>
+<div class="hero"><div><h1>Estilo internacional en Los Héroes, Mérida.</h1><p>Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.</p><a class="btn" href="agenda.html">Agendar mi cita</a></div></div>
+<section class="b menu" id="servicios"><h2>Servicios y precios</h2><div id="menu"><ul><li>Corte<i></i><b>$200</b></li><li>Corte y barba<i></i><b>$350</b></li></ul></div></section>
+<section class="b" id="barberos"><h2>Tus barberos</h2><div class="grid" id="team"></div><p>Elige a tu barbero al agendar y el horario se aparta al instante.</p></section>
+<section class="b" id="local"><h2>El local</h2><div class="hexs">
+<img loading="lazy" src="img/techo.jpg" alt="Luces hexagonales y logo en la pared"><img loading="lazy" src="img/vip.jpg" alt="Silla VIP"><img loading="lazy" src="img/recepcion.jpg" alt="Recepción y estación de trabajo"><img loading="lazy" src="img/bienvenido.jpg" alt="Entrada con tapete de bienvenida"></div></section>
+<section class="b" id="ubicacion"><h2>Dónde estamos</h2><p>Fracc. Los Héroes, Mérida, Yucatán.</p>
+<a class="btn" href="https://www.google.com/maps/search/?api=1&query=Onyx+Barber%C3%ADa+Fracc+Los+H%C3%A9roes+M%C3%A9rida+Yucat%C3%A1n">Cómo llegar</a></section>
+<div class="cta"><h2>¿Listo para tu corte?</h2><p>Agenda en menos de un minuto, desde tu celular.</p><a class="btn" href="agenda.html">Agendar mi cita</a></div>
+<footer>Onyx Barbería · Fracc. Los Héroes, Mérida, Yucatán</footer>
 <script>
-const $=s=>document.querySelector(s),m=x=>'$'+Number(x),HORAS=['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
-const J=(u,b)=>fetch(u,b&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);return d});
-const hoy=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
-const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fd=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
-let S={};try{S=JSON.parse(localStorage.onyx||'{}')}catch(e){}S.codigos=S.codigos||[];
-const guarda=()=>{try{localStorage.onyx=JSON.stringify(S)}catch(e){}};
-let E=[],sel='',tipo='todos';
-function ir(){const h=(location.hash||'#inicio').slice(1);document.querySelectorAll('section').forEach(s=>s.hidden=s.id!==h);document.querySelectorAll('nav a').forEach(a=>a.setAttribute('aria-current',a.hash==='#'+h));$('.fab').hidden=h==='agendar';if(h==='mis')mis()}
-addEventListener('hashchange',ir);ir();
-function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${esc(e.nombre)}</h3><p>${esc(e.descripcion)}</p><b>${m(e.precio)}</b></div>`).join('')}
-function filtros(){$('#filtros').innerHTML=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['servicio','Con barba']].map(([k,t])=>`<button aria-pressed="${k===tipo}" data-k="${k}">${t}</button>`).join('');
-document.querySelectorAll('#filtros button').forEach(b=>b.onclick=()=>{tipo=b.dataset.k;filtros();pintaE()})}
-async function horas(){sel='';const f=$('#dia').value,b=$('#bar').value;if(!f||!b)return;const t=await J(`/api/horarios?fecha=${f}&barbero=${encodeURIComponent(b)}`),ya=f===hoy()?new Date().getHours():-1;
-$('#hl').textContent='Horarios disponibles';$('#horas').innerHTML=HORAS.map(h=>`<button data-h="${h}" ${t.includes(h)||+h.slice(0,2)<=ya?'disabled':''} aria-pressed="false">${h}</button>`).join('');
-document.querySelectorAll('#horas button').forEach(x=>x.onclick=()=>{sel=x.dataset.h;document.querySelectorAll('#horas button').forEach(y=>y.setAttribute('aria-pressed',y===x))})}
-async function mis(){const el=$('#mlist');if(!S.codigos.length){el.innerHTML='<p>Aquí verás tus próximas citas cuando agendes una.</p>';return}
-try{const c=await J('/api/mis-citas',{codigos:S.codigos});
-el.innerHTML=c.length?c.map(x=>`<div class="card" style="margin-bottom:10px"><h3>${esc(x.servicio)} · ${m(x.precio)}</h3><p>${fd(x.fecha)} a las ${esc(x.hora)} con ${esc(x.barbero)}</p>${x.estado==='pendiente'?`<button data-c="${esc(x.codigo)}">Cancelar cita</button>`:'<p>Cita '+esc(x.estado)+'</p>'}</div>`).join(''):'<p>No tienes citas próximas.</p>';
-el.querySelectorAll('button[data-c]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Cancelar esta cita?'))return;try{await J('/api/cancelar',{codigo:b.dataset.c});mis()}catch(e){alert(e.message)}})}catch(e){el.textContent='No se pudieron cargar tus citas.'}}
-$('#dia').min=$('#dia').value=hoy();$('#dia').onchange=$('#bar').onchange=horas;$('#nom').value=S.nom||'';$('#tel').value=S.tel||'';
-$('#go').onclick=async()=>{const r=$('#res');r.className='msg';
-try{const nom=$('#nom').value.trim(),tel=$('#tel').value.trim();if(!sel||!nom||!tel)throw new Error('Elige un horario y escribe tu nombre y WhatsApp');
-const f=$('#dia').value,sv=$('#srv').value,b=$('#bar').value,d=await J('/api/citas',{cliente:nom,telefono:tel,barbero:b,servicio:sv,fecha:f,hora:sel});
-S.nom=nom;S.tel=tel;S.codigos.push(d.codigo);guarda();
-const p=f.replace(/-/g,''),h0=sel.replace(':',''),h1=String(+sel.slice(0,2)+1).padStart(2,'0')+sel.slice(3,5);
-const ics=`BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:${d.codigo}@onyx\nDTSTAMP:${p}T000000Z\nDTSTART;TZID=America/Merida:${p}T${h0}00\nDTEND;TZID=America/Merida:${p}T${h1}00\nSUMMARY:Cita en Onyx Barbería\nLOCATION:Fracc. Los Héroes\\, Mérida\\, Yucatán\nEND:VEVENT\nEND:VCALENDAR`;
-r.className='msg ok';r.innerHTML=`<b>Cita confirmada, ${esc(nom)}.</b><p>${esc(sv)} con ${esc(b)} · ${fd(f)} a las ${esc(sel)} · ${m(d.precio)}</p><a class="btn" download="cita-onyx.ics" href="data:text/calendar;charset=utf8,${encodeURIComponent(ics)}">Agregar a mi calendario</a> <a style="color:var(--gold)" href="#mis">Ver mis citas</a>`;horas()}
-catch(e){r.textContent=e.message;horas()}};
-(async()=>{E=await J('/api/estilos');filtros();pintaE();
-$('#srv').innerHTML=E.map(e=>`<option value="${esc(e.nombre)}">${esc(e.nombre)} · ${m(e.precio)}</option>`).join('');
-$('#pg').innerHTML=(await J('/api/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
-const i=await J('/api/info');$('#bar').innerHTML=i.barberos.map(b=>`<option>${esc(b)}</option>`).join('');horas()})();
+const $=s=>document.querySelector(s),m=x=>'$'+Number(x),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+fetch('/api/estilos').then(r=>r.json()).then(E=>{$('#menu').innerHTML=[['clásico','Cortes clásicos'],['nuevo','Las tendencias'],['servicio','Barba y combos']].map(([k,t])=>`<h3>${t}</h3><ul>${E.filter(e=>e.tipo===k).map(e=>`<li>${esc(e.nombre)}<i></i><b>${m(e.precio)}</b></li>`).join('')}</ul>`).join('')}).catch(()=>{});
+fetch('/api/info').then(r=>r.json()).then(i=>{$('#team').innerHTML=i.barberos.map(b=>`<div class="card"><h3>${esc(b)}</h3></div>`).join('')}).catch(()=>{});
 </script></body></html>
