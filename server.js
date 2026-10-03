@@ -10,16 +10,16 @@ const wrap = f => (q, s) => f(q, s).catch(e => s.status(500).json({ error: 'Erro
 const auth = (q, s, n) => (ADMIN && q.get('x-admin') === ADMIN) ? n() : s.status(401).json({ error: 'Contraseña incorrecta' });
 const SEED = [
  ['Taper clásico','clásico','Laterales degradados suaves y largo natural arriba.',200],
- ['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',220],
- ['Pompadour','clásico','Volumen al frente peinado hacia atrás.',230],
+ ['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',200],
+ ['Pompadour','clásico','Volumen al frente peinado hacia atrás.',200],
  ['Raya lateral','clásico','El corte formal de siempre, con raya marcada.',200],
- ['Corte militar','clásico','Corto y parejo, fácil de mantener.',180],
- ['Low fade','nuevo','Degradado bajo que arranca sobre la oreja.',220],
- ['Mid fade','nuevo','Degradado medio, el más pedido.',220],
- ['Burst fade','nuevo','Degradado curvo alrededor de la oreja.',240],
- ['Textured crop','nuevo','Corto con textura arriba y flequillo.',230],
- ['Mullet moderno','nuevo','Corto a los lados, largo atrás.',250],
- ['Corte y barba','servicio','Corte a elegir más perfilado de barba con navaja.',300],
+ ['Corte militar','clásico','Corto y parejo, fácil de mantener.',200],
+ ['Low fade','nuevo','Degradado bajo que arranca sobre la oreja.',200],
+ ['Mid fade','nuevo','Degradado medio, el más pedido.',200],
+ ['Burst fade','nuevo','Degradado curvo alrededor de la oreja.',200],
+ ['Textured crop','nuevo','Corto con textura arriba y flequillo.',200],
+ ['Mullet moderno','nuevo','Corto a los lados, largo atrás.',200],
+ ['Corte y barba','servicio','Corte a elegir más perfilado de barba con navaja.',350],
  ['Barba con navaja','servicio','Toalla caliente, navaja y aceite.',130]];
 const PROD = [
  ['Pomada mate','Fijación fuerte sin brillo.',180],['Cera con brillo','Acabado clásico y peinado pulido.',180],
@@ -32,6 +32,8 @@ const PROD = [
   await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC)`);
   if (!(await pool.query('SELECT 1 FROM estilos LIMIT 1')).rowCount)
     for (const r of SEED) await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio) VALUES($1,$2,$3,$4)', r);
+  await pool.query("UPDATE estilos SET precio=200 WHERE tipo IN ('clásico','nuevo')");
+  await pool.query("UPDATE estilos SET precio=350 WHERE nombre='Corte y barba'");
   if (!(await pool.query('SELECT 1 FROM productos LIMIT 1')).rowCount)
     for (const r of PROD) await pool.query('INSERT INTO productos(nombre,descripcion,precio) VALUES($1,$2,$3)', r);
 })().catch(console.error);

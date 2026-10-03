@@ -2,7 +2,7 @@
 <title>Onyx Barbería · Mérida</title><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="s.css"></head><body>
 <header><span class="logo">ONYX</span><nav><a href="#inicio">Inicio</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#agendar">Agendar</a></nav></header>
 <main>
-<section id="inicio"><h1>Estilo internacional, en Mérida.</h1><p>Cortes clásicos y las tendencias más nuevas. Elige tu estilo, tu barbero y tu hora.</p><a class="btn" href="#agendar">Agendar mi cita</a></section>
+<section id="inicio"><h1>Estilo internacional, en Mérida.</h1><p>Cortes clásicos y las tendencias más nuevas. Elige tu estilo, tu barbero y tu hora.</p><a class="btn" href="#agendar">Agendar mi cita</a><p>Corte $200 · Corte y barba $350 MXN</p></section>
 <section id="estilos" hidden><h2>Estilos de corte</h2><div class="chips" id="filtros"></div><div class="grid" id="eg"></div></section>
 <section id="productos" hidden><h2>Productos</h2><div class="grid" id="pg"></div></section>
 <section id="agendar" hidden><h2>Agenda tu cita</h2>
@@ -13,6 +13,7 @@
 <input id="nom" placeholder="Tu nombre" autocomplete="name"><input id="tel" placeholder="Tu WhatsApp" inputmode="tel" autocomplete="tel">
 <button id="go">Confirmar cita</button><div id="res" role="status"></div></section>
 </main>
+<footer style="max-width:760px;margin:auto;padding:0 18px 40px;color:var(--dim)">Onyx Barbería · Fracc. Los Héroes, Mérida, Yucatán · <a style="color:var(--gold)" href="https://www.google.com/maps/search/?api=1&query=Onyx+Barber%C3%ADa+Fracc+Los+H%C3%A9roes+M%C3%A9rida+Yucat%C3%A1n">Cómo llegar</a></footer>
 <script>
 const $=s=>document.querySelector(s),m=x=>'$'+Number(x),HORAS=['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
 const J=(u,b)=>fetch(u,b&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);return d});
