@@ -6,6 +6,7 @@ app.use(express.static('public'));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const BARBEROS = (process.env.BARBEROS || 'Barbero 1,Barbero 2').split(',').map(s => s.trim());
 const ADMIN = process.env.ADMIN_PASS || '';
+const HOY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Merida' });
 const wrap = f => (q, s) => f(q, s).catch(e => s.status(500).json({ error: 'Error del servidor' }));
 const auth = (q, s, n) => (ADMIN && q.get('x-admin') === ADMIN) ? n() : s.status(401).json({ error: 'Contraseña incorrecta' });
 const SEED = [
@@ -28,6 +29,7 @@ const PROD = [
   await pool.query(`CREATE TABLE IF NOT EXISTS citas (id SERIAL PRIMARY KEY, cliente TEXT NOT NULL, telefono TEXT, barbero TEXT NOT NULL,
     servicio TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT NOT NULL, precio NUMERIC DEFAULT 0, estado TEXT DEFAULT 'pendiente')`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS citas_slot ON citas(barbero,fecha,hora) WHERE estado<>'cancelada'`);
+  await pool.query('ALTER TABLE citas ADD COLUMN IF NOT EXISTS codigo TEXT');
   await pool.query(`CREATE TABLE IF NOT EXISTS estilos (id SERIAL PRIMARY KEY, nombre TEXT, tipo TEXT, descripcion TEXT, precio NUMERIC)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC)`);
   if (!(await pool.query('SELECT 1 FROM estilos LIMIT 1')).rowCount)
@@ -49,14 +51,24 @@ app.post('/api/citas', wrap(async (q, s) => {
   const { cliente, telefono, barbero, servicio, fecha, hora } = q.body;
   if (!cliente || !telefono || !BARBEROS.includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora))
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
-  if (fecha < new Date().toISOString().slice(0, 10)) return s.status(400).json({ error: 'Elige una fecha de hoy en adelante' });
+  if (fecha < HOY()) return s.status(400).json({ error: 'Elige una fecha de hoy en adelante' });
   const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1', [servicio]);
   if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
   try {
-    const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
-      [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio]);
+    const codigo = require('crypto').randomBytes(6).toString('hex');
+    const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,codigo,precio',
+      [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, codigo]);
     s.json(r.rows[0]);
   } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese horario ya se ocupó. Elige otro.' }); throw x; }
+}));
+app.post('/api/mis-citas', wrap(async (q, s) => {
+  const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 20);
+  const r = await pool.query('SELECT codigo,servicio,barbero,fecha::text AS fecha,hora,precio,estado FROM citas WHERE codigo = ANY($1) AND fecha >= $2 ORDER BY fecha,hora', [c, HOY()]);
+  s.json(r.rows);
+}));
+app.post('/api/cancelar', wrap(async (q, s) => {
+  const r = await pool.query("UPDATE citas SET estado='cancelada' WHERE codigo=$1 AND estado='pendiente' RETURNING id", [String(q.body.codigo)]);
+  r.rowCount ? s.json({ ok: true }) : s.status(404).json({ error: 'No se pudo cancelar esa cita' });
 }));
 app.get('/api/admin/citas', auth, wrap(async (q, s) => s.json((await pool.query('SELECT * FROM citas WHERE fecha=$1 ORDER BY hora', [q.query.fecha])).rows)));
 app.patch('/api/admin/citas/:id', auth, wrap(async (q, s) => s.json((await pool.query('UPDATE citas SET estado=$1 WHERE id=$2 RETURNING *', [q.body.estado, q.params.id])).rows[0])));

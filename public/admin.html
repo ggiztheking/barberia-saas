@@ -8,7 +8,7 @@ let K=sessionStorage.k||prompt('Contraseña de administrador');
 const J=async(u,b)=>{const r=await fetch(u,{method:b?'PATCH':'GET',headers:{'Content-Type':'application/json','x-admin':K},body:b&&JSON.stringify(b)});
 if(r.status===401){sessionStorage.removeItem('k');document.body.innerHTML='<main><h2>Contraseña incorrecta</h2><p>Recarga la página para intentar de nuevo.</p></main>';throw 0}
 sessionStorage.k=K;return r.json()};
-$('#dia').value=new Date().toISOString().slice(0,10);$('#dia').onchange=cargar;
+$('#dia').value=new Date().toLocaleDateString('en-CA');$('#dia').onchange=cargar;
 const est=async(id,e)=>{await J('/api/admin/citas/'+id,{estado:e});cargar()};
 async function cargar(){const f=$('#dia').value,c=await J('/api/admin/citas?fecha='+f);
 $('#lista').innerHTML=c.length?c.map(x=>`<div class="card" style="margin-bottom:8px"><b>${esc(x.hora)}</b> ${esc(x.cliente)} <p>${esc(x.servicio)} con ${esc(x.barbero)} · $${Number(x.precio)} · ${esc(x.estado)} · <a style="color:var(--gold)" href="https://wa.me/52${encodeURIComponent(String(x.telefono).replace(/\D/g,''))}">WhatsApp</a></p>

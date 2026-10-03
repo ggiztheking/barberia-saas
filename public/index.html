@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Onyx Barbería · Mérida</title><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&display=swap" rel="stylesheet"><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#090d1c"><link rel="apple-touch-icon" href="icon-192.png"><link rel="stylesheet" href="s.css"></head><body>
-<header><span class="logo">ONYX</span><nav><a href="#inicio">Inicio</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#agendar">Agendar</a></nav></header>
+<header><span class="logo">ONYX</span><nav><a href="#inicio">Inicio</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#agendar">Agendar</a><a href="#mis">Mis citas</a></nav></header>
 <main>
 <section id="inicio"><h1>Estilo internacional, en Mérida.</h1><p>Cortes clásicos y las tendencias más nuevas. Elige tu estilo, tu barbero y tu hora.</p><a class="btn" href="#agendar">Agendar mi cita</a><p>Corte $200 · Corte y barba $350 MXN</p>
 <div class="hero"><img src="img/hero.jpg" alt="Interior de Onyx Barbería con luces hexagonales y silla VIP"></div>
@@ -14,27 +14,42 @@
 <p id="hl">Elige barbero y fecha para ver horarios.</p><div class="chips" id="horas"></div>
 <input id="nom" placeholder="Tu nombre" autocomplete="name"><input id="tel" placeholder="Tu WhatsApp" inputmode="tel" autocomplete="tel">
 <button id="go">Confirmar cita</button><div id="res" role="status"></div></section>
+<section id="mis" hidden><h2>Mis citas</h2><div id="mlist"></div></section>
 </main>
 <footer style="max-width:760px;margin:auto;padding:0 18px 40px;color:var(--dim)">Onyx Barbería · Fracc. Los Héroes, Mérida, Yucatán · <a style="color:var(--gold)" href="https://www.google.com/maps/search/?api=1&query=Onyx+Barber%C3%ADa+Fracc+Los+H%C3%A9roes+M%C3%A9rida+Yucat%C3%A1n">Cómo llegar</a></footer>
+<a class="btn fab" href="#agendar">Agendar</a>
 <script>
 const $=s=>document.querySelector(s),m=x=>'$'+Number(x),HORAS=['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
 const J=(u,b)=>fetch(u,b&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);return d});
+const hoy=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fd=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+let S={};try{S=JSON.parse(localStorage.onyx||'{}')}catch(e){}S.codigos=S.codigos||[];
+const guarda=()=>{try{localStorage.onyx=JSON.stringify(S)}catch(e){}};
 let E=[],sel='',tipo='todos';
-function ir(){const h=(location.hash||'#inicio').slice(1);document.querySelectorAll('section').forEach(s=>s.hidden=s.id!==h);document.querySelectorAll('nav a').forEach(a=>a.setAttribute('aria-current',a.hash==='#'+h))}
+function ir(){const h=(location.hash||'#inicio').slice(1);document.querySelectorAll('section').forEach(s=>s.hidden=s.id!==h);document.querySelectorAll('nav a').forEach(a=>a.setAttribute('aria-current',a.hash==='#'+h));$('.fab').hidden=h==='agendar';if(h==='mis')mis()}
 addEventListener('hashchange',ir);ir();
-function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${e.nombre}</h3><p>${e.descripcion}</p><b>${m(e.precio)}</b></div>`).join('')}
+function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${esc(e.nombre)}</h3><p>${esc(e.descripcion)}</p><b>${m(e.precio)}</b></div>`).join('')}
 function filtros(){$('#filtros').innerHTML=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['servicio','Con barba']].map(([k,t])=>`<button aria-pressed="${k===tipo}" data-k="${k}">${t}</button>`).join('');
 document.querySelectorAll('#filtros button').forEach(b=>b.onclick=()=>{tipo=b.dataset.k;filtros();pintaE()})}
-async function horas(){sel='';const f=$('#dia').value,b=$('#bar').value;if(!f||!b)return;const t=await J(`/api/horarios?fecha=${f}&barbero=${encodeURIComponent(b)}`);
-$('#hl').textContent='Horarios disponibles';$('#horas').innerHTML=HORAS.map(h=>`<button data-h="${h}" ${t.includes(h)?'disabled':''} aria-pressed="false">${h}</button>`).join('');
+async function horas(){sel='';const f=$('#dia').value,b=$('#bar').value;if(!f||!b)return;const t=await J(`/api/horarios?fecha=${f}&barbero=${encodeURIComponent(b)}`),ya=f===hoy()?new Date().getHours():-1;
+$('#hl').textContent='Horarios disponibles';$('#horas').innerHTML=HORAS.map(h=>`<button data-h="${h}" ${t.includes(h)||+h.slice(0,2)<=ya?'disabled':''} aria-pressed="false">${h}</button>`).join('');
 document.querySelectorAll('#horas button').forEach(x=>x.onclick=()=>{sel=x.dataset.h;document.querySelectorAll('#horas button').forEach(y=>y.setAttribute('aria-pressed',y===x))})}
-$('#dia').min=$('#dia').value=new Date().toISOString().slice(0,10);$('#dia').onchange=$('#bar').onchange=horas;
+async function mis(){const el=$('#mlist');if(!S.codigos.length){el.innerHTML='<p>Aquí verás tus próximas citas cuando agendes una.</p>';return}
+try{const c=await J('/api/mis-citas',{codigos:S.codigos});
+el.innerHTML=c.length?c.map(x=>`<div class="card" style="margin-bottom:10px"><h3>${esc(x.servicio)} · ${m(x.precio)}</h3><p>${fd(x.fecha)} a las ${esc(x.hora)} con ${esc(x.barbero)}</p>${x.estado==='pendiente'?`<button data-c="${esc(x.codigo)}">Cancelar cita</button>`:'<p>Cita '+esc(x.estado)+'</p>'}</div>`).join(''):'<p>No tienes citas próximas.</p>';
+el.querySelectorAll('button[data-c]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Cancelar esta cita?'))return;try{await J('/api/cancelar',{codigo:b.dataset.c});mis()}catch(e){alert(e.message)}})}catch(e){el.textContent='No se pudieron cargar tus citas.'}}
+$('#dia').min=$('#dia').value=hoy();$('#dia').onchange=$('#bar').onchange=horas;$('#nom').value=S.nom||'';$('#tel').value=S.tel||'';
 $('#go').onclick=async()=>{const r=$('#res');r.className='msg';
-try{if(!sel||!$('#nom').value||!$('#tel').value)throw new Error('Elige un horario y escribe tu nombre y WhatsApp');
-await J('/api/citas',{cliente:$('#nom').value,telefono:$('#tel').value,barbero:$('#bar').value,servicio:$('#srv').value,fecha:$('#dia').value,hora:sel});
-r.className='msg ok';r.textContent=`Listo, ${$('#nom').value}. Te esperamos el ${$('#dia').value} a las ${sel}.`;horas()}catch(e){r.textContent=e.message;horas()}};
+try{const nom=$('#nom').value.trim(),tel=$('#tel').value.trim();if(!sel||!nom||!tel)throw new Error('Elige un horario y escribe tu nombre y WhatsApp');
+const f=$('#dia').value,sv=$('#srv').value,b=$('#bar').value,d=await J('/api/citas',{cliente:nom,telefono:tel,barbero:b,servicio:sv,fecha:f,hora:sel});
+S.nom=nom;S.tel=tel;S.codigos.push(d.codigo);guarda();
+const p=f.replace(/-/g,''),h0=sel.replace(':',''),h1=String(+sel.slice(0,2)+1).padStart(2,'0')+sel.slice(3,5);
+const ics=`BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:${d.codigo}@onyx\nDTSTAMP:${p}T000000Z\nDTSTART;TZID=America/Merida:${p}T${h0}00\nDTEND;TZID=America/Merida:${p}T${h1}00\nSUMMARY:Cita en Onyx Barbería\nLOCATION:Fracc. Los Héroes\\, Mérida\\, Yucatán\nEND:VEVENT\nEND:VCALENDAR`;
+r.className='msg ok';r.innerHTML=`<b>Cita confirmada, ${esc(nom)}.</b><p>${esc(sv)} con ${esc(b)} · ${fd(f)} a las ${esc(sel)} · ${m(d.precio)}</p><a class="btn" download="cita-onyx.ics" href="data:text/calendar;charset=utf8,${encodeURIComponent(ics)}">Agregar a mi calendario</a> <a style="color:var(--gold)" href="#mis">Ver mis citas</a>`;horas()}
+catch(e){r.textContent=e.message;horas()}};
 (async()=>{E=await J('/api/estilos');filtros();pintaE();
-$('#srv').innerHTML=E.map(e=>`<option value="${e.nombre}">${e.nombre} · ${m(e.precio)}</option>`).join('');
-$('#pg').innerHTML=(await J('/api/productos')).map(p=>`<div class="card"><h3>${p.nombre}</h3><p>${p.descripcion}</p><b>${m(p.precio)}</b></div>`).join('');
-const i=await J('/api/info');$('#bar').innerHTML=i.barberos.map(b=>`<option>${b}</option>`).join('');horas()})();
+$('#srv').innerHTML=E.map(e=>`<option value="${esc(e.nombre)}">${esc(e.nombre)} · ${m(e.precio)}</option>`).join('');
+$('#pg').innerHTML=(await J('/api/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
+const i=await J('/api/info');$('#bar').innerHTML=i.barberos.map(b=>`<option>${esc(b)}</option>`).join('');horas()})();
 </script></body></html>
