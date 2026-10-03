@@ -122,7 +122,8 @@ api.patch('/admin/precio', auth, wrap(async (q, s) => {
 api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
-  const barberos = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean).slice(0, 8).join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps');
+  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps');
+  if (lista.length > lim) return s.status(400).json({ error: `Tu plan permite hasta ${lim} barberos` });
   if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps))) return s.status(400).json({ error: 'Revisa los datos' });
   await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7 WHERE id=$8',
     [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, n.id]);
