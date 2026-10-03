@@ -2,13 +2,25 @@ const express = require('express');
 const { Pool } = require('pg');
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
+app.set('trust proxy', 1);
+app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' }); n(); });
+app.use('/img', express.static('public/img', { maxAge: '7d' }));
+app.use(express.static('public', { maxAge: '5m' }));
+app.get('/health', (q, s) => s.send('ok'));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const BARBEROS = (process.env.BARBEROS || 'Barbero 1,Barbero 2').split(',').map(s => s.trim());
 const ADMIN = process.env.ADMIN_PASS || '';
 const HOY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Merida' });
 const wrap = f => (q, s) => f(q, s).catch(e => s.status(500).json({ error: 'Error del servidor' }));
-const auth = (q, s, n) => (ADMIN && q.get('x-admin') === ADMIN) ? n() : s.status(401).json({ error: 'Contraseña incorrecta' });
+const hits = new Map();
+setInterval(() => hits.clear(), 3600e3).unref();
+const limita = (k, max, ms) => { const n = Date.now(), a = (hits.get(k) || []).filter(t => n - t < ms); a.push(n); hits.set(k, a); return a.length > max; };
+const auth = (q, s, n) => {
+  const k = 'a' + q.ip;
+  if ((hits.get(k) || []).filter(t => Date.now() - t < 6e5).length >= 8) return s.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
+  if (ADMIN && q.get('x-admin') === ADMIN) return n();
+  limita(k, 99, 6e5); s.status(401).json({ error: 'Contraseña incorrecta' });
+};
 const SEED = [
  ['Taper clásico','clásico','Laterales degradados suaves y largo natural arriba.',200],
  ['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',200],
@@ -34,8 +46,6 @@ const PROD = [
   await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC)`);
   if (!(await pool.query('SELECT 1 FROM estilos LIMIT 1')).rowCount)
     for (const r of SEED) await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio) VALUES($1,$2,$3,$4)', r);
-  await pool.query("UPDATE estilos SET precio=200 WHERE tipo IN ('clásico','nuevo')");
-  await pool.query("UPDATE estilos SET precio=350 WHERE nombre='Corte y barba'");
   if (!(await pool.query('SELECT 1 FROM productos LIMIT 1')).rowCount)
     for (const r of PROD) await pool.query('INSERT INTO productos(nombre,descripcion,precio) VALUES($1,$2,$3)', r);
 })().catch(console.error);
@@ -48,6 +58,7 @@ app.get('/api/horarios', wrap(async (q, s) => {
   s.json(r.rows.map(x => x.hora));
 }));
 app.post('/api/citas', wrap(async (q, s) => {
+  if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
   const { cliente, telefono, barbero, servicio, fecha, hora } = q.body;
   if (!cliente || !telefono || !BARBEROS.includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora))
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
@@ -69,6 +80,14 @@ app.post('/api/mis-citas', wrap(async (q, s) => {
 app.post('/api/cancelar', wrap(async (q, s) => {
   const r = await pool.query("UPDATE citas SET estado='cancelada' WHERE codigo=$1 AND estado='pendiente' RETURNING id", [String(q.body.codigo)]);
   r.rowCount ? s.json({ ok: true }) : s.status(404).json({ error: 'No se pudo cancelar esa cita' });
+}));
+app.get('/api/admin/catalogo', auth, wrap(async (q, s) => s.json({
+  estilos: (await pool.query('SELECT id,nombre,precio FROM estilos ORDER BY id')).rows,
+  productos: (await pool.query('SELECT id,nombre,precio FROM productos ORDER BY id')).rows })));
+app.patch('/api/admin/precio', auth, wrap(async (q, s) => {
+  const { tabla, id, precio } = q.body;
+  if (!['estilos', 'productos'].includes(tabla) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Dato no válido' });
+  s.json((await pool.query(`UPDATE ${tabla} SET precio=$1 WHERE id=$2 RETURNING id`, [precio, id])).rows[0] || {});
 }));
 app.get('/api/admin/citas', auth, wrap(async (q, s) => s.json((await pool.query('SELECT * FROM citas WHERE fecha=$1 ORDER BY hora', [q.query.fecha])).rows)));
 app.patch('/api/admin/citas/:id', auth, wrap(async (q, s) => s.json((await pool.query('UPDATE citas SET estado=$1 WHERE id=$2 RETURNING *', [q.body.estado, q.params.id])).rows[0])));
