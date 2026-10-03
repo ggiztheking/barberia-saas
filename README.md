@@ -8,12 +8,14 @@ SaaS para barberías en Mérida. Este proyecto permite gestionar negocios barber
 - Express
 - PostgreSQL
 - HTML + CSS + JavaScript
+- JWT para administración
+- Helmet + rate limiting para seguridad
 
 ## Requisitos
 
 - Node.js 18 o superior
 - PostgreSQL configurado y accesible
-- Base de datos con conexión disponible por `DATABASE_URL`
+- Base de datos accesible por `DATABASE_URL`
 
 ## Instalación
 
@@ -37,9 +39,13 @@ Crea un archivo `.env` con este contenido:
 
 ```env
 PORT=3000
+NODE_ENV=production
 DATABASE_URL=postgresql://usuario:password@localhost:5432/barberia
 ADMIN_PASS=admin123
-BARBEROS=Pedro,GGTHEBARBER
+JWT_SECRET=cambia-esto-en-produccion
+JWT_EXPIRES_IN=12h
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX=200
 ```
 
 ## Funcionalidades principales
@@ -48,17 +54,21 @@ BARBEROS=Pedro,GGTHEBARBER
 - Agenda de citas por barbero y fecha
 - Administración de servicios y precios
 - Gestión de horarios
-- Panel para administración del negocio
+- Panel de administración con JWT
 - APIs para consultar info, estilos, productos y citas
+- Endpoint de salud para monitoreo
 
 ## Mejoras aplicadas en esta versión
 
 - Soporte a `.env` sin depender de paquetes externos
 - Validación centralizada para slugs, fechas, horas y teléfonos
-- `npm test` con pruebas para lógica clave
-- Manejo de errores más robusto en Express
-- Validación del estado de citas antes de actualizarlo
-- Mejor limpieza del `.gitignore` para evitar secretos en el repositorio
+- JWT para administración real
+- Seguridad con Helmet y rate limiting
+- Logging con Pino
+- Manejo de errores más robusto
+- Healthcheck de base de datos
+- Pruebas básicas para lógica clave
+- Preparación para uso real y despliegue
 
 ## Ejecutar pruebas
 
@@ -66,24 +76,55 @@ BARBEROS=Pedro,GGTHEBARBER
 npm test
 ```
 
+## Login administrativo
+
+Para acceder al panel del negocio, puedes usar el endpoint:
+
+```bash
+POST /api/:slug/admin/login
+Content-Type: application/json
+
+{
+  "password": "admin123"
+}
+```
+
+La respuesta devuelve un JWT que debes enviar en el header:
+
+```http
+Authorization: Bearer <token>
+```
+
 ## Estructura relevante
 
 ```text
 .
 ├── lib/
+│   ├── auth.js
+│   ├── config.js
+│   ├── logger.js
 │   └── validation.js
 ├── public/
 ├── test/
 │   └── validation.test.js
 ├── .env.example
 ├── .gitignore
+├── Dockerfile
+├── README.md
 ├── package.json
 ├── server.js
-└── README.md
+└── .dockerignore
+```
+
+## Despliegue con Docker
+
+```bash
+docker build -t barberia-saas .
+docker run -p 3000:3000 --env-file .env barberia-saas
 ```
 
 ## Observaciones
 
 - El proyecto usa un esquema inicial con datos de ejemplo para un negocio llamado `onyx`.
 - La base de datos se crea automáticamente si no existe.
-- El servicio usa cookies/headers de seguridad básicos para reforzar la aplicación.
+- En producción, `JWT_SECRET` y `ADMIN_PASS` deben ser secrets reales.

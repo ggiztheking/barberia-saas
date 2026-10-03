@@ -1,40 +1,42 @@
-const fs = require('fs');
-const path = require('path');
-const express = require('express'), { Pool } = require('pg'), crypto = require('crypto');
+const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { Pool } = require('pg');
+const crypto = require('crypto');
+const { config } = require('./lib/config');
+const { logger } = require('./lib/logger');
+const { createAdminToken, verifyAdminToken } = require('./lib/auth');
 const { normalizePhone, validateSlug, isValidDateString, isValidHour, normalizeBarberList, sanitizeText } = require('./lib/validation');
-
-const loadEnv = () => {
-  const envPath = path.join(__dirname, '.env');
-  if (!fs.existsSync(envPath)) return;
-
-  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!match) continue;
-
-    const [, key, value] = match;
-    if (process.env[key] === undefined) {
-      process.env[key] = value.replace(/^['"]|['"]$/g, '');
-    }
-  }
-};
-
-loadEnv();
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use('/api', rateLimit({
+  windowMs: config.RATE_LIMIT_WINDOW_MS,
+  max: config.RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos. Intenta más tarde.' }
+}));
+app.use(express.json({ limit: '1mb' }));
 app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' }); n(); });
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
-app.get('/health', (q, s) => s.send('ok'));
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+app.get('/health', async (q, s) => {
+  try {
+    await pool.query('SELECT 1');
+    s.json({ status: 'ok', service: config.APP_NAME, database: 'connected' });
+  } catch (error) {
+    logger.error({ err: error }, 'healthcheck_failed');
+    s.status(503).json({ status: 'error', service: config.APP_NAME, database: 'disconnected' });
+  }
+});
+
+const pool = new Pool({ connectionString: config.DATABASE_URL });
 const HOY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Merida' });
 const wrap = f => (q, s, n) => Promise.resolve(f(q, s, n)).catch(e => {
-  console.error(e);
+  logger.error({ err: e, url: q.originalUrl, method: q.method }, 'request_error');
   s.status(500).json({ error: 'Error del servidor' });
 });
 const hits = new Map();
@@ -57,25 +59,32 @@ const seed = async id => {
   for (const r of SEED) await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4,$5)', [...r, id]);
   for (const r of PROD) await pool.query('INSERT INTO productos(nombre,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4)', [...r, id]);
 };
+
 (async () => {
-  await pool.query(`CREATE TABLE IF NOT EXISTS negocios (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, nombre TEXT NOT NULL, whatsapp TEXT, direccion TEXT, maps TEXT,
-    barberos TEXT NOT NULL DEFAULT 'Barbero 1', hora_ini INT DEFAULT 10, hora_fin INT DEFAULT 19, fotos BOOLEAN DEFAULT false, plan TEXT DEFAULT 'prueba', salt TEXT, hash TEXT, creado TIMESTAMPTZ DEFAULT NOW())`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS citas (id SERIAL PRIMARY KEY, cliente TEXT NOT NULL, telefono TEXT, barbero TEXT NOT NULL, servicio TEXT NOT NULL,
-    fecha DATE NOT NULL, hora TEXT NOT NULL, precio NUMERIC DEFAULT 0, estado TEXT DEFAULT 'pendiente', codigo TEXT) `);
-  await pool.query(`CREATE TABLE IF NOT EXISTS estilos (id SERIAL PRIMARY KEY, nombre TEXT, tipo TEXT, descripcion TEXT, precio NUMERIC) `);
-  await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC) `);
-  await pool.query('ALTER TABLE citas ADD COLUMN IF NOT EXISTS codigo TEXT');
-  for (const t of ['citas', 'estilos', 'productos']) await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS negocio_id INT`);
-  let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
-  if (!o) {
-    const salt = crypto.randomBytes(8).toString('hex');
-    o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Onyx Barbería','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.google.com/?q=Fracc.%20Los%20H%C3%A9roes%20M%C3%A9rida','Pedro,GGTHEBARBER',false,$1,$2) RETURNING id", [salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS negocios (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, nombre TEXT NOT NULL, whatsapp TEXT, direccion TEXT, maps TEXT,
+      barberos TEXT NOT NULL DEFAULT 'Barbero 1', hora_ini INT DEFAULT 10, hora_fin INT DEFAULT 19, fotos BOOLEAN DEFAULT false, plan TEXT DEFAULT 'prueba', salt TEXT, hash TEXT, creado TIMESTAMPTZ DEFAULT NOW())`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS citas (id SERIAL PRIMARY KEY, cliente TEXT NOT NULL, telefono TEXT, barbero TEXT NOT NULL, servicio TEXT NOT NULL,
+      fecha DATE NOT NULL, hora TEXT NOT NULL, precio NUMERIC DEFAULT 0, estado TEXT DEFAULT 'pendiente', codigo TEXT)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS estilos (id SERIAL PRIMARY KEY, nombre TEXT, tipo TEXT, descripcion TEXT, precio NUMERIC)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC)`);
+    await pool.query('ALTER TABLE citas ADD COLUMN IF NOT EXISTS codigo TEXT');
+    for (const t of ['citas', 'estilos', 'productos']) await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS negocio_id INT`);
+    let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
+    if (!o) {
+      const salt = crypto.randomBytes(8).toString('hex');
+      o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Onyx Barbería','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.google.com/?q=Fracc.%20Los%20H%C3%A9roes%20M%C3%A9rida','Pedro,GGTHEBARBER',false,$1,$2) RETURNING id", [salt, hashPass(config.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
+    }
+    for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
+    if (!(await pool.query('SELECT 1 FROM estilos WHERE negocio_id=$1', [o.id])).rowCount) await seed(o.id);
+    await pool.query('DROP INDEX IF EXISTS citas_slot');
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS citas_slot2 ON citas(negocio_id,barbero,fecha,hora) WHERE estado<>'cancelada'");
+    logger.info('database_ready');
+  } catch (error) {
+    logger.error({ err: error }, 'database_init_failed');
+    process.exit(1);
   }
-  for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
-  if (!(await pool.query('SELECT 1 FROM estilos WHERE negocio_id=$1', [o.id])).rowCount) await seed(o.id);
-  await pool.query('DROP INDEX IF EXISTS citas_slot');
-  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS citas_slot2 ON citas(negocio_id,barbero,fecha,hora) WHERE estado<>'cancelada'");
-})().catch(console.error);
+})();
 
 const RES = ['api', 'registro', 'img', 'health', 'admin', 'agenda', 'super', 'manifest'];
 app.post('/api/registro', wrap(async (q, s) => {
@@ -101,12 +110,30 @@ app.use('/api/:slug', async (q, s, n) => {
     q.neg = r.rows[0]; n();
   } catch (e) { s.status(500).json({ error: 'Error del servidor' }); }
 }, api);
+
 const auth = (q, s, n) => {
   const k = 'a' + q.ip + q.params.slug;
   if ((hits.get(k) || []).filter(t => Date.now() - t < 6e5).length >= 8) return s.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
+
+  const authorizationHeader = q.get('authorization');
+  const bearerToken = authorizationHeader && authorizationHeader.startsWith('Bearer ') ? authorizationHeader.slice(7) : null;
+  const tokenPayload = bearerToken ? verifyAdminToken(bearerToken) : null;
+  if (tokenPayload && tokenPayload.slug === q.params.slug) {
+    q.admin = tokenPayload;
+    return n();
+  }
+
   if (okPass(q.neg, q.get('x-admin'))) return n();
-  limita(k, 99, 6e5); s.status(401).json({ error: 'Contraseña incorrecta' });
+  limita(k, 99, 6e5);
+  s.status(401).json({ error: 'Contraseña incorrecta' });
 };
+
+api.post('/admin/login', wrap(async (q, s) => {
+  const password = String(q.body.password || '');
+  if (!okPass(q.neg, password)) return s.status(401).json({ error: 'Contraseña incorrecta' });
+  const token = createAdminToken(q.params.slug, q.neg.id);
+  s.json({ token, expiresIn: config.JWT_EXPIRES_IN });
+}));
 api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, hora_ini: n.hora_ini, hora_fin: n.hora_fin }); });
 api.get('/estilos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,tipo,descripcion,precio FROM estilos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
@@ -180,13 +207,15 @@ app.get('/:slug/manifest.json', existe, (q, s) => s.json({ name: 'Agenda de barb
   background_color: '#07090f', theme_color: '#07090f', lang: 'es', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png' }] }));
 
 app.use((err, q, s, n) => {
-  console.error(err);
+  logger.error({ err, url: q.originalUrl, method: q.method }, 'unhandled_error');
   if (s.headersSent) return n(err);
   s.status(500).json({ error: 'Error del servidor' });
 });
 
 if (require.main === module) {
-  app.listen(process.env.PORT || 3000);
+  app.listen(config.PORT, () => {
+    logger.info({ port: config.PORT }, 'server_started');
+  });
 }
 
 module.exports = { app, pool };
