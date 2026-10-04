@@ -1,7 +1,8 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=4"></head><body>
+<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=5"></head><body>
 <header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a></nav></header><main>
 <div id="plan"></div>
+<h2>Resumen</h2><div class="chips" id="per"></div><div id="ins"></div>
 <div class="acc" style="margin-bottom:10px"><button onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
 <h2>Citas del día</h2><div id="lista"></div><h2 style="margin-top:24px">Corte de caja</h2><div id="corte"></div>
 <h2 style="margin-top:24px">Precios</h2><div id="cat"></div>
@@ -32,5 +33,19 @@ $('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18
 const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
 async function ajustes(){const a=await J('/admin/ajustes');banner(a);$('#aj').innerHTML=`<p>Tu enlace para clientes: <a style="color:var(--gold)" href="/${N}">${location.host}/${N}</a></p>`+CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+'<button onclick="guardaAj()">Guardar cambios</button>'}
 async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);try{await J('/admin/ajustes',b);alert('Cambios guardados')}catch(e){alert(e.message)}}
-cargar();catalogo();ajustes();
+let DIAS=7;const mx=x=>'$'+Number(x).toLocaleString('es-MX');
+function barras(v,et){const M=Math.max(1,...v.map(x=>x[1]));return '<div class="bars">'+v.map(([k,n])=>`<i style="height:${Math.max(2,n/M*100)}%" title="${esc(k)}: ${esc(et(n))}"></i>`).join('')+'</div>'}
+function hb(rows){const M=Math.max(1,...rows.map(r=>r[1]));return rows.map(([n,v,t])=>`<div class="hb"><span>${esc(n)}</span><u><i style="width:${v/M*100}%"></i></u><em>${esc(t)}</em></div>`).join('')||'<p>Aún no hay datos.</p>'}
+function periodo(){$('#per').innerHTML=[[7,'7 días'],[30,'30 días']].map(([d,t])=>`<button aria-pressed="${d===DIAS}" onclick="DIAS=${d};periodo();insights()">${t}</button>`).join('')}
+async function insights(){const r=await J('/admin/insights?dias='+DIAS),c=r.estados.completada||0,x=r.estados.cancelada||0,ing=r.porDia.reduce((a,d)=>a+d.ingresos,0);
+const mapa=Object.fromEntries(r.porDia.map(d=>[d.f,d.ingresos])),dias=[];for(let i=DIAS-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);dias.push(d.toLocaleDateString('en-CA'))}
+const k=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`,H=r.horas,nu=r.clientes.total-r.clientes.recurrentes;
+$('#ins').innerHTML=(r.sinCerrar?`<div class="msg" style="margin-bottom:16px">Tienes <b>${r.sinCerrar}</b> citas pasadas sin cerrar. Márcalas como completadas o canceladas para que tu corte de caja sea exacto.</div>`:'')+
+`<div class="kpis">${k(mx(ing),'Ingresos')}${k(c,'Cortes hechos')}${k(c?mx(ing/c):'—','Ticket promedio')}${k(c+x?Math.round(x/(c+x)*100)+'%':'—','Cancelaciones')}${k(r.porAtender,'Citas por atender')}</div>
+<h3>Ingresos por día</h3>${barras(dias.map(f=>[f,mapa[f]||0]),mx)}<div class="ejes"><span>${dias[0].slice(5)}</span><span>${dias[dias.length-1].slice(5)}</span></div>
+<h3>Servicios más pedidos</h3>${hb(r.servicios.map(s=>[s.servicio,s.n,s.n+' · '+mx(s.ingresos)]))}
+<h3>Por barbero</h3>${hb(r.barberos.map(b=>[b.barbero,b.ingresos,b.n+' cortes · '+mx(b.ingresos)]))}
+<h3>Horas con más citas</h3>${barras(H.map(h=>[h.hora,h.n]),n=>n+' citas')}<div class="ejes"><span>${H.length?H[0].hora:''}</span><span>${H.length?H[H.length-1].hora:''}</span></div>
+<h3>Clientes</h3>${hb([['Recurrentes',r.clientes.recurrentes,r.clientes.recurrentes+' clientes'],['Nuevos',nu,nu+' clientes']])}`}
+cargar();catalogo();ajustes();periodo();insights();
 </script></body></html>

@@ -34,3 +34,12 @@ button:hover,.btn:hover{background:transparent;color:var(--gold)}
 html{scroll-behavior:smooth}::selection{background:var(--gold);color:#12100a}
 @media(prefers-reduced-motion:no-preference){main>section,.hero div,.b,.top,.cta{animation:fi .7s ease both}}
 @keyframes fi{from{opacity:0;transform:translateY(8px)}}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0 24px;margin-bottom:26px}
+.kpi{border-top:1px solid var(--line);padding:14px 0}.kpi b{display:block;font:500 34px/1.1 'Cormorant Garamond',Georgia,serif;color:var(--gold)}
+.kpi span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:120px;margin:12px 0 4px;border-bottom:1px solid var(--line)}.bars i{flex:1;background:var(--gold);opacity:.8;min-height:2px}.bars i:hover{opacity:1}
+.ejes{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.1em;color:var(--dim);margin-bottom:6px}
+.hb{display:flex;align-items:center;gap:12px;margin:9px 0;font-size:15px}.hb span{flex:0 0 120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb u{flex:1;height:5px;background:var(--line);text-decoration:none}.hb u i{display:block;height:100%;background:var(--gold)}.hb em{flex:0 0 auto;font-style:normal;color:var(--dim);font-size:14px}
+main h3{margin:26px 0 4px}

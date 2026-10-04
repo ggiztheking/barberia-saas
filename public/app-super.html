@@ -1,7 +1,7 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Panel del dueño</title><link rel="icon" href="/icon-192.png"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=4"></head><body>
+<title>Panel del dueño</title><link rel="icon" href="/icon-192.png"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=5"></head><body>
 <header><span class="logo">PANEL DEL DUEÑO</span><a class="btn alt" href="/registro" style="padding:12px 20px">Nueva barbería</a></header>
-<main><div id="res"></div><div id="lista" style="margin-top:18px"></div></main>
+<main><div id="res"></div><div id="ins" style="margin-top:22px"></div><div id="lista" style="margin-top:18px"></div></main>
 <script>
 const $=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let K=sessionStorage.sk||prompt('Contraseña del dueño');
@@ -16,5 +16,12 @@ return `<div class="card"><h3><a style="color:var(--ink);text-decoration:none" h
 <p>/${esc(x.slug)} · ${P[x.plan]||esc(x.plan)} · ${x.activo?(d===null?'sin vencimiento':d>=0?d+' días restantes':'vencida'):'suspendida'} · ${Number(x.citas)} citas${x.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(x.whatsapp)+'">WhatsApp</a>':''}</p>
 <div class="acc"><button onclick="act(${i},'pagar_basico')">Pagó Básico</button><button onclick="act(${i},'pagar_pro')">Pagó Pro</button><button class="alt" onclick="act(${i},'extender')">+14 días</button><button class="alt" onclick="act(${i},'${x.activo?'suspender':'activar'}')">${x.activo?'Suspender':'Activar'}</button></div></div>`}).join('')}
 async function act(id,accion){if(accion==='suspender'&&!confirm('¿Suspender esta barbería?'))return;await J('/super/negocio/'+id,{accion});cargar()}
-cargar();
+const mx=x=>'$'+Number(x).toLocaleString('es-MX');
+const lista=(L,f)=>L.length?L.map(x=>`<div class="hb"><span style="flex:1"><a style="color:var(--ink)" href="/${esc(x.slug)}">${esc(x.nombre)}</a></span><em>${esc(f(x))}</em></div>`).join(''):'<p>Ninguna. Todo en orden.</p>';
+async function insights(){const r=await J('/super/insights'),M=Math.max(1,...r.semanas.map(x=>x.n)),k=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`;
+$('#ins').innerHTML=`<div class="kpis">${k(r.total,'Barberías')}${k(r.total?Math.round(r.pago/r.total*100)+'%':'—','Conversión a pago')}${k(r.activas7,'Activas 7 días')}${k(r.citas7,'Citas 7 días')}${k(mx(r.ingresos7),'Movimiento de clientes 7 días')}${k(r.vencidas,'Pruebas vencidas')}</div>
+<h3>Registros por semana</h3><div class="bars">${r.semanas.map(x=>`<i style="height:${Math.max(2,x.n/M*100)}%" title="${esc(x.semana)}: ${x.n}"></i>`).join('')}</div>
+<h3>Pruebas que vencen en 3 días</h3>${lista(r.porVencer,x=>'vence '+new Date(x.vence).toLocaleDateString('es-MX'))}
+<h3>Sin ninguna cita en más de 2 días</h3>${lista(r.inactivas,()=>'sin actividad')}`}
+cargar();insights();
 </script></body></html>

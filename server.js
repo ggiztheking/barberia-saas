@@ -63,6 +63,18 @@ const superAuth = (q, s, n) => {
 };
 app.get('/api/super/negocios', superAuth, wrap(async (q, s) => s.json((await pool.query(
   'SELECT n.id,n.slug,n.nombre,n.whatsapp,n.plan,n.activo,n.vence,n.creado,(SELECT COUNT(*)::int FROM citas c WHERE c.negocio_id=n.id) AS citas FROM negocios n ORDER BY n.id')).rows)));
+app.get('/api/super/insights', superAuth, wrap(async (q, s) => {
+  const hoy = HOY(), d = new Date(hoy + 'T12:00'); d.setDate(d.getDate() - 6);
+  const h7 = d.toLocaleDateString('en-CA'), Q = (sql, p = []) => pool.query(sql, p).then(r => r.rows);
+  const [sem, act, c7, porVencer, inact, tot] = await Promise.all([
+    Q("SELECT to_char(date_trunc('week',creado),'YYYY-MM-DD') semana, COUNT(*)::int n FROM negocios GROUP BY 1 ORDER BY 1 DESC LIMIT 8"),
+    Q('SELECT COUNT(DISTINCT negocio_id)::int n FROM citas WHERE fecha>=$1 AND fecha<=$2', [h7, hoy]),
+    Q("SELECT COUNT(*)::int n, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float ingresos FROM citas WHERE fecha>=$1 AND fecha<=$2", [h7, hoy]),
+    Q("SELECT id,slug,nombre,vence FROM negocios WHERE plan='prueba' AND activo AND vence BETWEEN now() AND now()+interval '3 days' ORDER BY vence"),
+    Q("SELECT id,slug,nombre FROM negocios n WHERE creado < now()-interval '2 days' AND NOT EXISTS (SELECT 1 FROM citas c WHERE c.negocio_id=n.id) ORDER BY id"),
+    Q("SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE plan<>'prueba')::int pago, COUNT(*) FILTER (WHERE plan='prueba' AND vence<now())::int vencidas FROM negocios")]);
+  s.json({ semanas: sem.reverse(), activas7: act[0].n, citas7: c7[0].n, ingresos7: c7[0].ingresos, porVencer, inactivas: inact, ...tot[0] });
+}));
 app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
   const mas = "GREATEST(COALESCE(vence,now()),now())", A = {
     pagar_basico: `plan='basico',activo=true,vence=${mas}+interval '30 days'`, pagar_pro: `plan='pro',activo=true,vence=${mas}+interval '30 days'`,
@@ -140,6 +152,21 @@ api.patch('/admin/precio', auth, wrap(async (q, s) => {
   const { tabla, id, precio } = q.body;
   if (!['estilos', 'productos'].includes(tabla) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Dato no válido' });
   s.json((await pool.query(`UPDATE ${tabla} SET precio=$1 WHERE id=$2 AND negocio_id=$3 RETURNING id`, [precio, id, q.neg.id])).rows[0] || {});
+}));
+api.get('/admin/insights', auth, wrap(async (q, s) => {
+  const dias = q.query.dias === '30' ? 30 : 7, hasta = HOY(), d = new Date(hasta + 'T12:00'); d.setDate(d.getDate() - (dias - 1));
+  const desde = d.toLocaleDateString('en-CA'), id = q.neg.id, P = [id, desde, hasta];
+  const W = 'negocio_id=$1 AND fecha BETWEEN $2 AND $3', C = W + " AND estado='completada'", Q = (sql, p = P) => pool.query(sql, p).then(r => r.rows);
+  const [dia, est, srv, bar, hor, cli, pend, vieja] = await Promise.all([
+    Q(`SELECT fecha::text f, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY fecha`),
+    Q(`SELECT estado, COUNT(*)::int n FROM citas WHERE ${W} GROUP BY estado`),
+    Q(`SELECT servicio, COUNT(*)::int n, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY servicio ORDER BY n DESC LIMIT 5`),
+    Q(`SELECT barbero, COUNT(*)::int n, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY barbero ORDER BY ingresos DESC`),
+    Q(`SELECT hora, COUNT(*)::int n FROM citas WHERE ${W} AND estado<>'cancelada' GROUP BY hora ORDER BY hora`),
+    Q(`SELECT COUNT(DISTINCT telefono)::int total, COUNT(DISTINCT telefono) FILTER (WHERE telefono IN (SELECT telefono FROM citas WHERE negocio_id=$1 AND fecha<$2 AND estado='completada'))::int recurrentes FROM citas WHERE ${C}`),
+    Q("SELECT COUNT(*)::int n FROM citas WHERE negocio_id=$1 AND fecha>=$2 AND estado='pendiente'", [id, hasta]),
+    Q("SELECT COUNT(*)::int n FROM citas WHERE negocio_id=$1 AND fecha<$2 AND estado='pendiente'", [id, hasta])]);
+  s.json({ dias, porDia: dia, estados: Object.fromEntries(est.map(x => [x.estado, x.n])), servicios: srv, barberos: bar, horas: hor, clientes: cli[0], porAtender: pend[0].n, sinCerrar: vieja[0].n });
 }));
 api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
