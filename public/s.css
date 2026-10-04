@@ -31,3 +31,6 @@ button:hover,.btn:hover{background:transparent;color:var(--gold)}
 .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.gal img{width:100%;height:220px;object-fit:cover;display:block}
 .fab{position:fixed;right:16px;bottom:16px;box-shadow:0 6px 20px #000c}
 [hidden]{display:none!important}
+html{scroll-behavior:smooth}::selection{background:var(--gold);color:#12100a}
+@media(prefers-reduced-motion:no-preference){main>section,.hero div,.b,.top,.cta{animation:fi .7s ease both}}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}}

@@ -1,0 +1,20 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Panel del dueño</title><link rel="icon" href="/icon-192.png"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=4"></head><body>
+<header><span class="logo">PANEL DEL DUEÑO</span><a class="btn alt" href="/registro" style="padding:12px 20px">Nueva barbería</a></header>
+<main><div id="res"></div><div id="lista" style="margin-top:18px"></div></main>
+<script>
+const $=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let K=sessionStorage.sk||prompt('Contraseña del dueño');
+const J=async(u,b)=>{const r=await fetch('/api'+u,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','x-super':K},body:b&&JSON.stringify(b)});
+if(r.status===401||r.status===429){sessionStorage.removeItem('sk');document.body.innerHTML='<main><h2>Acceso denegado</h2><p>Recarga la página para intentar de nuevo.</p></main>';throw 0}
+const d=await r.json();sessionStorage.sk=K;return d};
+const P={prueba:'Prueba',basico:'Básico',pro:'Pro'};
+async function cargar(){const L=await J('/super/negocios'),b=L.filter(x=>x.plan==='basico').length,p=L.filter(x=>x.plan==='pro').length;
+$('#res').innerHTML=`<div class="msg ok"><b>${L.length}</b> barberías · <b>${b+p}</b> de pago · ingreso estimado <b>$${b*299+p*499} MXN</b> al mes</div>`;
+$('#lista').innerHTML=L.map(x=>{const d=x.vence?Math.ceil((new Date(x.vence)-Date.now())/864e5):null,i=Number(x.id);
+return `<div class="card"><h3><a style="color:var(--ink);text-decoration:none" href="/${esc(x.slug)}">${esc(x.nombre)}</a></h3>
+<p>/${esc(x.slug)} · ${P[x.plan]||esc(x.plan)} · ${x.activo?(d===null?'sin vencimiento':d>=0?d+' días restantes':'vencida'):'suspendida'} · ${Number(x.citas)} citas${x.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(x.whatsapp)+'">WhatsApp</a>':''}</p>
+<div class="acc"><button onclick="act(${i},'pagar_basico')">Pagó Básico</button><button onclick="act(${i},'pagar_pro')">Pagó Pro</button><button class="alt" onclick="act(${i},'extender')">+14 días</button><button class="alt" onclick="act(${i},'${x.activo?'suspender':'activar'}')">${x.activo?'Suspender':'Activar'}</button></div></div>`}).join('')}
+async function act(id,accion){if(accion==='suspender'&&!confirm('¿Suspender esta barbería?'))return;await J('/super/negocio/'+id,{accion});cargar()}
+cargar();
+</script></body></html>

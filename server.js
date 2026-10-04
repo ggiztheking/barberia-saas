@@ -15,6 +15,7 @@ const limita = (k, max, ms) => { const n = Date.now(), a = (hits.get(k) || []).f
 const hashPass = (p, salt) => crypto.scryptSync(String(p), salt, 32).toString('hex');
 const okPass = (n, p) => !!(n.salt && typeof p === 'string' && crypto.timingSafeEqual(Buffer.from(hashPass(p, n.salt), 'hex'), Buffer.from(n.hash, 'hex')));
 const wa = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 10 ? '52' + d : d; };
+const vigente = n => n.activo !== false && (!n.vence || new Date(n.vence) >= new Date());
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
 const SEED = [
  ['Taper clásico','clásico','Laterales degradados suaves y largo natural arriba.',200],['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',200],
@@ -38,18 +39,38 @@ const seed = async id => {
   await pool.query(`CREATE TABLE IF NOT EXISTS productos (id SERIAL PRIMARY KEY, nombre TEXT, descripcion TEXT, precio NUMERIC)`);
   await pool.query('ALTER TABLE citas ADD COLUMN IF NOT EXISTS codigo TEXT');
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS negocio_id INT`);
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true');
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS vence TIMESTAMPTZ');
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
   if (!o) {
     const salt = crypto.randomBytes(8).toString('hex');
     o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Onyx Barbería','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.app.goo.gl/NpfSt23Eorm4wgd37',$1,true,$2,$3) RETURNING id",
       [process.env.BARBEROS || 'Pedro,GGTHEBARBER', salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
   }
+  await pool.query("UPDATE negocios SET plan='pro' WHERE slug='onyx' AND plan='prueba'");
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
   if (!(await pool.query('SELECT 1 FROM estilos WHERE negocio_id=$1', [o.id])).rowCount) await seed(o.id);
   await pool.query('DROP INDEX IF EXISTS citas_slot');
   await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS citas_slot2 ON citas(negocio_id,barbero,fecha,hora) WHERE estado<>'cancelada'");
 })().catch(console.error);
 
+const SUPER = process.env.SUPER_PASS || '';
+const superAuth = (q, s, n) => {
+  const k = 's' + q.ip, p = q.get('x-super') || '';
+  if ((hits.get(k) || []).filter(t => Date.now() - t < 6e5).length >= 8) return s.status(429).json({ error: 'Demasiados intentos' });
+  if (SUPER && p.length === SUPER.length && crypto.timingSafeEqual(Buffer.from(p), Buffer.from(SUPER))) return n();
+  limita(k, 99, 6e5); s.status(401).json({ error: 'Acceso denegado' });
+};
+app.get('/api/super/negocios', superAuth, wrap(async (q, s) => s.json((await pool.query(
+  'SELECT n.id,n.slug,n.nombre,n.whatsapp,n.plan,n.activo,n.vence,n.creado,(SELECT COUNT(*)::int FROM citas c WHERE c.negocio_id=n.id) AS citas FROM negocios n ORDER BY n.id')).rows)));
+app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
+  const mas = "GREATEST(COALESCE(vence,now()),now())", A = {
+    pagar_basico: `plan='basico',activo=true,vence=${mas}+interval '30 days'`, pagar_pro: `plan='pro',activo=true,vence=${mas}+interval '30 days'`,
+    extender: `vence=${mas}+interval '14 days'`, suspender: 'activo=false', activar: 'activo=true' }[q.body.accion];
+  if (!A) return s.status(400).json({ error: 'Acción no válida' });
+  await pool.query(`UPDATE negocios SET ${A} WHERE id=$1`, [q.params.id]);
+  s.json({ ok: true });
+}));
 const RES = ['api', 'registro', 'img', 'health', 'admin', 'agenda', 'super', 'manifest'];
 app.post('/api/registro', wrap(async (q, s) => {
   if (limita('r' + q.ip, 5, 3600e3)) return s.status(429).json({ error: 'Demasiados registros. Intenta más tarde.' });
@@ -58,7 +79,7 @@ app.post('/api/registro', wrap(async (q, s) => {
     return s.status(400).json({ error: 'Revisa el nombre, el enlace (3 a 30 letras, números o guiones) y la contraseña (mínimo 8 caracteres)' });
   const salt = crypto.randomBytes(8).toString('hex');
   try {
-    const r = await pool.query('INSERT INTO negocios(slug,nombre,whatsapp,salt,hash) VALUES($1,$2,$3,$4,$5) RETURNING id', [slug, nombre, wa(q.body.whatsapp) || null, salt, hashPass(pw, salt)]);
+    const r = await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,salt,hash,vence) VALUES($1,$2,$3,$4,$5,now()+interval '14 days') RETURNING id", [slug, nombre, wa(q.body.whatsapp) || null, salt, hashPass(pw, salt)]);
     await seed(r.rows[0].id);
     s.json({ slug });
   } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese enlace ya está en uso. Prueba otro.' }); throw x; }
@@ -78,7 +99,7 @@ const auth = (q, s, n) => {
   if (okPass(q.neg, q.get('x-admin'))) return n();
   limita(k, 99, 6e5); s.status(401).json({ error: 'Contraseña incorrecta' });
 };
-api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, hora_ini: n.hora_ini, hora_fin: n.hora_fin }); });
+api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin }); });
 api.get('/estilos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,tipo,descripcion,precio FROM estilos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
@@ -87,6 +108,7 @@ api.get('/horarios', wrap(async (q, s) => {
 }));
 api.post('/citas', wrap(async (q, s) => {
   if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
+  if (!vigente(q.neg)) return s.status(403).json({ error: 'Esta barbería no está recibiendo citas por ahora.' });
   const n = q.neg, { cliente, telefono, barbero, servicio, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
   if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || h < n.hora_ini || h > n.hora_fin)
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
@@ -119,7 +141,7 @@ api.patch('/admin/precio', auth, wrap(async (q, s) => {
   if (!['estilos', 'productos'].includes(tabla) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Dato no válido' });
   s.json((await pool.query(`UPDATE ${tabla} SET precio=$1 WHERE id=$2 AND negocio_id=$3 RETURNING id`, [precio, id, q.neg.id])).rows[0] || {});
 }));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin }); });
+api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
   const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps');
@@ -130,13 +152,29 @@ api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   s.json({ ok: true });
 }));
 
+api.post('/admin/item', auth, wrap(async (q, s) => {
+  const { tabla, tipo, descripcion, precio } = q.body, nm = String(q.body.nombre || '').trim().slice(0, 60);
+  if (!['estilos', 'productos'].includes(tabla) || !nm || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Escribe el nombre y un precio válido' });
+  if ((await pool.query(`SELECT COUNT(*)::int n FROM ${tabla} WHERE negocio_id=$1`, [q.neg.id])).rows[0].n >= 40) return s.status(400).json({ error: 'Llegaste al límite de 40 elementos' });
+  const d = String(descripcion || '').slice(0, 120);
+  if (tabla === 'estilos') await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4,$5)', [nm, ['clásico', 'nuevo', 'servicio'].includes(tipo) ? tipo : 'servicio', d, precio, q.neg.id]);
+  else await pool.query('INSERT INTO productos(nombre,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4)', [nm, d, precio, q.neg.id]);
+  s.json({ ok: true });
+}));
+api.post('/admin/borrar', auth, wrap(async (q, s) => {
+  if (!['estilos', 'productos'].includes(q.body.tabla)) return s.status(400).json({ error: 'Dato no válido' });
+  await pool.query(`DELETE FROM ${q.body.tabla} WHERE id=$1 AND negocio_id=$2`, [q.body.id, q.neg.id]);
+  s.json({ ok: true });
+}));
+
 const existe = async (q, s, n) => {
-  try { (await pool.query('SELECT 1 FROM negocios WHERE slug=$1', [q.params.slug])).rowCount ? n() : s.status(404).send('Negocio no encontrado'); }
+  try { (await pool.query('SELECT 1 FROM negocios WHERE slug=$1', [q.params.slug])).rowCount ? n() : s.status(404).send('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/s.css><main style="text-align:center;padding-top:20vh"><h1>No encontramos esta barbería</h1><p>Revisa el enlace o crea la tuya.</p><a class=btn href=/registro>Crear mi barbería</a></main>'); }
   catch (e) { s.status(500).send('Error del servidor'); }
 };
 const page = f => (q, s) => s.sendFile(f, { root: __dirname + '/public' });
 app.get('/', page('saas.html'));
 app.get('/registro', page('registro.html'));
+app.get('/super', page('app-super.html'));
 app.get('/agenda.html', (q, s) => s.redirect(301, '/onyx/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/onyx/admin'));
 app.get('/:slug', existe, page('negocio.html'));

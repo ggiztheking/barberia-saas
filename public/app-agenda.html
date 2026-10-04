@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=3"></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=4"></head><body>
 <header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mis citas</a></nav></header>
 <main>
 <section id="agendar"><h2>Agenda tu cita</h2>
@@ -46,5 +46,6 @@ HORAS=Array.from({length:i.hora_fin-i.hora_ini+1},(_,k)=>String(i.hora_ini+k).pa
 $('#fn').innerHTML=esc(i.nombre)+(i.direccion?' · '+esc(i.direccion):'')+(i.maps?' · <a style="color:var(--gold)" href="'+esc(i.maps)+'">Cómo llegar</a>':'')+(i.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(i.whatsapp)+'">WhatsApp</a>':'');
 $('#bar').innerHTML=i.barberos.map(b=>'<option>'+esc(b)+'</option>').join('');
 E=await J('/estilos');filtros();pintaE();$('#srv').innerHTML=E.map(e=>'<option value="'+esc(e.nombre)+'">'+esc(e.nombre)+' · '+m(e.precio)+'</option>').join('');
-$('#pg').innerHTML=(await J('/productos')).map(p=>'<div class="card"><h3>'+esc(p.nombre)+'</h3><p>'+esc(p.descripcion)+'</p><b>'+m(p.precio)+'</b></div>').join('');horas()})();
+$('#pg').innerHTML=(await J('/productos')).map(p=>'<div class="card"><h3>'+esc(p.nombre)+'</h3><p>'+esc(p.descripcion)+'</p><b>'+m(p.precio)+'</b></div>').join('');
+i.abierto?horas():$('#agendar').innerHTML='<h2>Agenda</h2><p>Esta barbería no está recibiendo citas en línea por ahora.'+(i.whatsapp?' Escríbenos por <a style="color:var(--gold)" href="https://wa.me/'+esc(i.whatsapp)+'">WhatsApp</a>.':'')+'</p>'})();
 </script></body></html>
