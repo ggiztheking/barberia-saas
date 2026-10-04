@@ -16,6 +16,8 @@ const hashPass = (p, salt) => crypto.scryptSync(String(p), salt, 32).toString('h
 const okPass = (n, p) => !!(n.salt && typeof p === 'string' && crypto.timingSafeEqual(Buffer.from(hashPass(p, n.salt), 'hex'), Buffer.from(n.hash, 'hex')));
 const wa = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 10 ? '52' + d : d; };
 const vigente = n => n.activo !== false && (!n.vence || new Date(n.vence) >= new Date());
+const todas = n => Array.from({ length: n.hora_fin - n.hora_ini + 1 }, (_, k) => String(n.hora_ini + k).padStart(2, '0') + ':00');
+const cerrado = (n, f) => (n.cierra || '').split(',').includes(String(new Date(f + 'T12:00').getDay()));
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
 const SEED = [
  ['Taper clásico','clásico','Laterales degradados suaves y largo natural arriba.',200],['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',200],
@@ -41,6 +43,8 @@ const seed = async id => {
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS negocio_id INT`);
   await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true');
   await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS vence TIMESTAMPTZ');
+  await pool.query("ALTER TABLE negocios ADD COLUMN IF NOT EXISTS cierra TEXT DEFAULT ''");
+  await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
   if (!o) {
     const salt = crypto.randomBytes(8).toString('hex');
@@ -115,8 +119,12 @@ api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direcci
 api.get('/estilos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,tipo,descripcion,precio FROM estilos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
-  const r = await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [q.neg.id, q.query.fecha, q.query.barbero]);
-  s.json(r.rows.map(x => x.hora));
+  const { fecha, barbero } = q.query, n = q.neg;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return s.json([]);
+  if (cerrado(n, fecha)) return s.json(todas(n));
+  const r = await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [n.id, fecha, barbero]);
+  const b = await pool.query('SELECT hora FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3', [n.id, fecha, barbero]);
+  s.json(b.rows.some(x => x.hora === null) ? todas(n) : [...r.rows, ...b.rows].map(x => x.hora));
 }));
 api.post('/citas', wrap(async (q, s) => {
   if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
@@ -127,6 +135,8 @@ api.post('/citas', wrap(async (q, s) => {
   if (fecha < HOY()) return s.status(400).json({ error: 'Elige una fecha de hoy en adelante' });
   const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2', [servicio, n.id]);
   if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
+  if (cerrado(n, fecha) || (await pool.query('SELECT 1 FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND (hora IS NULL OR hora=$4)', [n.id, fecha, barbero, hora])).rowCount)
+    return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
   try {
     const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio',
       [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, crypto.randomBytes(6).toString('hex'), n.id]);
@@ -168,14 +178,38 @@ api.get('/admin/insights', auth, wrap(async (q, s) => {
     Q("SELECT COUNT(*)::int n FROM citas WHERE negocio_id=$1 AND fecha<$2 AND estado='pendiente'", [id, hasta])]);
   s.json({ dias, porDia: dia, estados: Object.fromEntries(est.map(x => [x.estado, x.n])), servicios: srv, barberos: bar, horas: hor, clientes: cli[0], porAtender: pend[0].n, sinCerrar: vieja[0].n });
 }));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, abierto: vigente(q.neg) }); });
+api.post('/admin/cita', auth, wrap(async (q, s) => {
+  const n = q.neg, { cliente, telefono, barbero, servicio, fecha, hora, atendida } = q.body;
+  if (!String(cliente || '').trim() || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora)) return s.status(400).json({ error: 'Revisa el nombre, el barbero y la hora' });
+  const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2', [servicio, n.id]);
+  if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
+  try {
+    await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,estado,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [String(cliente).trim().slice(0, 80), String(telefono || '').slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, crypto.randomBytes(6).toString('hex'), atendida ? 'completada' : 'pendiente', n.id]);
+    s.json({ ok: true });
+  } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese barbero ya tiene una cita a esa hora' }); throw x; }
+}));
+api.get('/admin/bloqueos', auth, wrap(async (q, s) => s.json((await pool.query('SELECT id,barbero,fecha::text AS fecha,hora,motivo FROM bloqueos WHERE negocio_id=$1 AND fecha>=$2 ORDER BY fecha,barbero,hora', [q.neg.id, HOY()])).rows)));
+api.post('/admin/bloqueo', auth, wrap(async (q, s) => {
+  const n = q.neg, { barbero, fecha, hora, motivo } = q.body, lista = barbero === 'todos' ? bars(n) : [barbero];
+  if (!lista.every(b => bars(n).includes(b)) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || (hora && !/^\d{2}:\d{2}$/.test(hora))) return s.status(400).json({ error: 'Revisa los datos' });
+  for (const b of lista) await pool.query('INSERT INTO bloqueos(negocio_id,barbero,fecha,hora,motivo) VALUES($1,$2,$3,$4,$5)', [n.id, b, fecha, hora || null, String(motivo || '').slice(0, 60)]);
+  s.json({ ok: true });
+}));
+api.post('/admin/bloqueo/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM bloqueos WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
+api.get('/admin/clientes', auth, wrap(async (q, s) => s.json((await pool.query(
+  `SELECT regexp_replace(telefono,'\\D','','g') AS tel, (array_agg(cliente ORDER BY fecha DESC, id DESC))[1] AS nombre,
+   COUNT(*) FILTER (WHERE estado='completada')::int AS visitas, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float AS gastado,
+   (MAX(fecha) FILTER (WHERE estado='completada'))::text AS ultima, (MIN(fecha) FILTER (WHERE estado='pendiente' AND fecha>=$2))::text AS proxima
+   FROM citas WHERE negocio_id=$1 AND regexp_replace(telefono,'\\D','','g')<>'' GROUP BY 1 ORDER BY MAX(fecha) DESC LIMIT 300`, [q.neg.id, HOY()])).rows)));
+api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, plan, vence, abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
-  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps');
+  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra');
   if (lista.length > lim) return s.status(400).json({ error: `Tu plan permite hasta ${lim} barberos` });
-  if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps))) return s.status(400).json({ error: 'Revisa los datos' });
-  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7 WHERE id=$8',
-    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, n.id]);
+  if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps)) || !/^([0-6](,[0-6])*)?$/.test(cierra)) return s.status(400).json({ error: 'Revisa los datos' });
+  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8 WHERE id=$9',
+    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, n.id]);
   s.json({ ok: true });
 }));
 
@@ -207,6 +241,7 @@ app.get('/admin.html', (q, s) => s.redirect(301, '/onyx/admin'));
 app.get('/:slug', existe, page('negocio.html'));
 app.get('/:slug/agenda', existe, page('app-agenda.html'));
 app.get('/:slug/admin', existe, page('app-admin.html'));
+app.get('/:slug/cartel', existe, page('cartel.html'));
 app.get('/:slug/manifest.json', existe, (q, s) => s.json({ name: 'Agenda de barbería', short_name: 'Barbería', start_url: `/${q.params.slug}/agenda`, display: 'standalone',
   background_color: '#07090f', theme_color: '#07090f', lang: 'es', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }] }));
 app.listen(process.env.PORT || 3000);

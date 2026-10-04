@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=4"></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=6"></head><body>
 <header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mis citas</a></nav></header>
 <main>
 <section id="agendar"><h2>Agenda tu cita</h2>
@@ -26,7 +26,7 @@ function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).
 function filtros(){$('#filtros').innerHTML=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['servicio','Con barba']].map(([k,t])=>'<button aria-pressed="'+(k===tipo)+'" data-k="'+k+'">'+t+'</button>').join('');
 document.querySelectorAll('#filtros button').forEach(b=>b.onclick=()=>{tipo=b.dataset.k;filtros();pintaE()})}
 async function horas(){sel='';const f=$('#dia').value,b=$('#bar').value;if(!f||!b)return;const t=await J('/horarios?fecha='+f+'&barbero='+encodeURIComponent(b)),ya=f===hoy()?new Date().getHours():-1;
-$('#hl').textContent='Horarios disponibles';$('#horas').innerHTML=HORAS.map(h=>'<button data-h="'+h+'" '+(t.includes(h)||+h.slice(0,2)<=ya?'disabled':'')+' aria-pressed="false">'+h+'</button>').join('');
+$('#hl').textContent=t.length>=HORAS.length?'No hay horarios disponibles ese día. Prueba con otra fecha.':'Horarios disponibles';$('#horas').innerHTML=HORAS.map(h=>'<button data-h="'+h+'" '+(t.includes(h)||+h.slice(0,2)<=ya?'disabled':'')+' aria-pressed="false">'+h+'</button>').join('');
 document.querySelectorAll('#horas button').forEach(x=>x.onclick=()=>{sel=x.dataset.h;document.querySelectorAll('#horas button').forEach(y=>y.setAttribute('aria-pressed',y===x))})}
 async function mis(){const el=$('#mlist');if(!S.codigos.length){el.innerHTML='<p>Aquí verás tus próximas citas cuando agendes una.</p>';return}
 try{const c=await J('/mis-citas',{codigos:S.codigos});

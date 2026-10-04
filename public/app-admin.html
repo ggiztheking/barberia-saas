@@ -1,11 +1,11 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=5"></head><body>
+<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=6"></head><body>
 <header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a></nav></header><main>
 <div id="plan"></div>
 <h2>Resumen</h2><div class="chips" id="per"></div><div id="ins"></div>
 <div class="acc" style="margin-bottom:10px"><button onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
-<h2>Citas del día</h2><div id="lista"></div><h2 style="margin-top:24px">Corte de caja</h2><div id="corte"></div>
-<h2 style="margin-top:24px">Precios</h2><div id="cat"></div>
+<h2>Citas del día</h2><div id="lista"></div><h2 style="margin-top:24px">Nueva cita</h2><p>Para clientes que escriben por WhatsApp, llaman o llegan sin cita. Se agenda en el día que tienes arriba.</p><div id="nc"></div><h2 style="margin-top:24px">Corte de caja</h2><div id="corte"></div>
+<h2 style="margin-top:24px">Clientes</h2><div id="cli"></div><h2 style="margin-top:24px">Descansos y días libres</h2><div id="blq"></div><h2 style="margin-top:24px">Precios</h2><div id="cat"></div>
 <h2 style="margin-top:24px">Mi barbería</h2><div id="aj"></div></main>
 <script>
 const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -23,7 +23,7 @@ async function cargar(){const f=$('#dia').value,c=await J('/admin/citas?fecha='+
 $('#lista').innerHTML=c.length?c.map(x=>`<div class="card"><b>${esc(x.hora)}</b> ${esc(x.cliente)} <p>${esc(x.servicio)} con ${esc(x.barbero)} · $${Number(x.precio)} · ${esc(x.estado)} · <a style="color:var(--gold)" href="${esc(wa(x))}">Recordar por WhatsApp</a></p>
 <div class="acc"><button onclick="est(${Number(x.id)},'completada')">Completada</button><button onclick="est(${Number(x.id)},'cancelada')">Cancelar</button></div></div>`).join(''):'<p>Sin citas este día.</p>';
 const t=await J('/admin/corte?fecha='+f);$('#corte').innerHTML=t.length?t.map(x=>`<div class="card">${esc(x.barbero)}: ${x.cortes} cortes · $${x.total}</div>`).join('')+`<p><b>Total del día: $${t.reduce((a,x)=>a+x.total,0)}</b></p>`:'<p>Aún no hay citas completadas.</p>'}
-async function catalogo(){const c=await J('/admin/catalogo');
+async function catalogo(){const c=await J('/admin/catalogo');SERV=c.estilos.map(x=>x.nombre);forms();
 $('#cat').innerHTML=[['estilos','Servicios',c.estilos],['productos','Productos',c.productos]].map(([t,n,r])=>`<h3>${n}</h3>`+r.map(x=>`<div class="acc" style="align-items:center;margin-bottom:6px"><span style="flex:1;min-width:140px">${esc(x.nombre)}</span><input type="number" min="0" value="${Number(x.precio)}" style="width:90px;margin:0" id="p-${t}-${Number(x.id)}" aria-label="Precio de ${esc(x.nombre)}"><button style="margin:0" onclick="precio('${t}',${Number(x.id)})">Guardar</button><button class="alt" style="margin:0" onclick="borra('${t}',${Number(x.id)})">Quitar</button></div>`).join('')+`<div class="acc" style="align-items:end;margin:14px 0 26px"><input id="n-${t}" placeholder="Nuevo ${t==='estilos'?'servicio':'producto'}" style="flex:1;min-width:140px;margin:0">${t==='estilos'?'<select id="t-estilos" style="width:auto;margin:0"><option value="clásico">Clásico</option><option value="nuevo">Nuevo</option><option value="servicio">Barba / combo</option></select>':''}<input id="v-${t}" type="number" min="0" placeholder="$" style="width:80px;margin:0"><button style="margin:0" onclick="agrega('${t}')">Agregar</button></div>`).join('')}
 async function precio(t,id){const v=$(`#p-${t}-${id}`).value;if(v==='')return;await J('/admin/precio',{tabla:t,id,precio:Number(v)});alert('Precio guardado')}
 async function agrega(t){try{await J('/admin/item',{tabla:t,nombre:$('#n-'+t).value,tipo:t==='estilos'?$('#t-estilos').value:undefined,precio:Number($('#v-'+t).value)},'POST');catalogo()}catch(e){alert(e.message)}}
@@ -31,8 +31,28 @@ async function borra(t,id){if(!confirm('¿Quitar este elemento?'))return;await J
 function banner(a){const d=a.vence?Math.ceil((new Date(a.vence)-Date.now())/864e5):null,P={prueba:'Prueba gratis',basico:'Plan Básico',pro:'Plan Pro'}[a.plan]||a.plan;
 $('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18px"><b>${esc(P)}</b> · ${!a.abierto?'Tu cuenta está vencida o suspendida y tus clientes no pueden agendar. Contáctanos para reactivarla.':d===null?'sin vencimiento':d+' días restantes'}</div>`}
 const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
-async function ajustes(){const a=await J('/admin/ajustes');banner(a);$('#aj').innerHTML=`<p>Tu enlace para clientes: <a style="color:var(--gold)" href="/${N}">${location.host}/${N}</a></p>`+CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+'<button onclick="guardaAj()">Guardar cambios</button>'}
-async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);try{await J('/admin/ajustes',b);alert('Cambios guardados')}catch(e){alert(e.message)}}
+let BARS=[],SERV=[],NEG='',HI=10,HF=19,CL=[],FIL='todos';
+const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],opt=l=>l.map(x=>`<option>${esc(x)}</option>`).join(''),kp=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`;
+async function ajustes(){const a=await J('/admin/ajustes');banner(a);BARS=a.barberos.split(',').map(x=>x.trim()).filter(Boolean);NEG=a.nombre;HI=+a.hora_ini;HF=+a.hora_fin;
+$('#aj').innerHTML=`<p>Tu enlace para clientes: <a style="color:var(--gold)" href="/${N}">${location.host}/${N}</a> · <a style="color:var(--gold)" href="/${N}/cartel">Imprimir cartel con QR</a></p>`+CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+
+`<label>Días que no abre</label><div class="acc" style="margin:8px 0 20px;gap:16px">${DS.map((d,i)=>`<label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><input type="checkbox" class="cz" value="${i}" style="width:auto;margin:0" ${(a.cierra||'').split(',').includes(String(i))?'checked':''}>${d}</label>`).join('')}</div><button onclick="guardaAj()">Guardar cambios</button>`;forms();bloqueos()}
+async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);b.cierra=[...document.querySelectorAll('.cz:checked')].map(x=>x.value).join(',');try{await J('/admin/ajustes',b);alert('Cambios guardados')}catch(e){alert(e.message)}}
+function forms(){if(!BARS.length||!SERV.length)return;
+$('#nc').innerHTML=`<div class="acc"><input id="nc-n" placeholder="Nombre del cliente" style="flex:2;min-width:150px;margin:0"><input id="nc-t" placeholder="WhatsApp (opcional)" inputmode="tel" style="flex:2;min-width:150px;margin:0"></div>
+<div class="acc" style="margin-top:8px"><select id="nc-b" style="flex:1;margin:0">${opt(BARS)}</select><select id="nc-s" style="flex:1;margin:0">${opt(SERV)}</select><input id="nc-h" type="time" value="${String(HI).padStart(2,'0')}:00" style="width:130px;margin:0"></div>
+<label style="display:flex;gap:8px;align-items:center;margin:14px 0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><input id="nc-a" type="checkbox" style="width:auto;margin:0"> Ya se atendió (cliente sin cita)</label><button onclick="nueva()">Agregar cita</button>`}
+async function nueva(){try{await J('/admin/cita',{cliente:$('#nc-n').value,telefono:$('#nc-t').value,barbero:$('#nc-b').value,servicio:$('#nc-s').value,fecha:$('#dia').value,hora:$('#nc-h').value,atendida:$('#nc-a').checked},'POST');$('#nc-n').value=$('#nc-t').value='';cargar();insights();clientes()}catch(e){alert(e.message)}}
+async function bloqueos(){if(!BARS.length)return;const L=await J('/admin/bloqueos'),H=Array.from({length:HF-HI+1},(_,k)=>String(HI+k).padStart(2,'0')+':00');
+$('#blq').innerHTML=`<p>Marca descansos, comidas, vacaciones o días libres. Esos horarios dejan de aparecer para tus clientes.</p><div class="acc"><select id="bq-b" style="flex:1;margin:0"><option value="todos">Todos los barberos</option>${opt(BARS)}</select><input id="bq-f" type="date" value="${hoy()}" style="flex:1;margin:0"><select id="bq-h" style="flex:1;margin:0"><option value="">Todo el día</option>${opt(H)}</select></div>
+<div class="acc" style="margin:8px 0 14px"><input id="bq-m" placeholder="Motivo (opcional)" style="flex:1;margin:0"><button style="margin:0" onclick="bloquea()">Bloquear</button></div>`+(L.length?L.map(x=>`<div class="hb"><span style="flex:1;min-width:0;white-space:normal">${esc(x.barbero)} · ${esc(x.fecha)} · ${x.hora?esc(x.hora):'todo el día'}${x.motivo?' · '+esc(x.motivo):''}</span><button class="alt" style="padding:8px 12px" onclick="quitaB(${Number(x.id)})">Quitar</button></div>`).join(''):'<p>No hay bloqueos próximos.</p>')}
+async function bloquea(){try{await J('/admin/bloqueo',{barbero:$('#bq-b').value,fecha:$('#bq-f').value,hora:$('#bq-h').value,motivo:$('#bq-m').value},'POST');bloqueos()}catch(e){alert(e.message)}}
+async function quitaB(id){await J('/admin/bloqueo/borrar',{id},'POST');bloqueos()}
+const dd=f=>Math.floor((Date.now()-new Date(f+'T12:00'))/864e5);
+const wc=c=>{const t=c.tel.length===10?'52'+c.tel:c.tel,u=location.origin+'/'+N+'/agenda';return 'https://wa.me/'+t+'?text='+encodeURIComponent(c.ultima&&dd(c.ultima)>=30?`Hola ${c.nombre}, hace tiempo no te vemos en ${NEG}. ¿Te agendamos un corte? ${u}`:`Hola ${c.nombre}, gracias por visitarnos en ${NEG}. Agenda tu próxima cita aquí: ${u}`)};
+async function clientes(){CL=await J('/admin/clientes');pintaCl()}
+function pintaCl(){const sv=CL.filter(c=>c.ultima&&dd(c.ultima)>=30&&!c.proxima),fr=CL.filter(c=>c.visitas>=3),L=FIL==='sin'?sv:FIL==='fre'?fr:CL;
+$('#cli').innerHTML=`<div class="kpis">${kp(CL.length,'Clientes')}${kp(fr.length,'Frecuentes (3+ visitas)')}${kp(sv.length,'Sin volver 30+ días')}</div><div class="chips">${[['todos','Todos'],['sin','Sin volver'],['fre','Frecuentes']].map(([k,t])=>`<button aria-pressed="${k===FIL}" onclick="FIL='${k}';pintaCl()">${t}</button>`).join('')}</div>`+
+(L.slice(0,60).map(c=>`<div class="hb"><span style="flex:1;min-width:0">${esc(c.nombre)}</span><em>${c.visitas} visitas · ${mx(c.gastado)}${c.ultima?' · hace '+dd(c.ultima)+' d':''}</em><a class="btn alt" style="padding:8px 12px" href="${esc(wc(c))}">Escribir</a></div>`).join('')||'<p>Todavía no hay clientes aquí.</p>')}
 let DIAS=7;const mx=x=>'$'+Number(x).toLocaleString('es-MX');
 function barras(v,et){const M=Math.max(1,...v.map(x=>x[1]));return '<div class="bars">'+v.map(([k,n])=>`<i style="height:${Math.max(2,n/M*100)}%" title="${esc(k)}: ${esc(et(n))}"></i>`).join('')+'</div>'}
 function hb(rows){const M=Math.max(1,...rows.map(r=>r[1]));return rows.map(([n,v,t])=>`<div class="hb"><span>${esc(n)}</span><u><i style="width:${v/M*100}%"></i></u><em>${esc(t)}</em></div>`).join('')||'<p>Aún no hay datos.</p>'}
@@ -47,5 +67,5 @@ $('#ins').innerHTML=(r.sinCerrar?`<div class="msg" style="margin-bottom:16px">Ti
 <h3>Por barbero</h3>${hb(r.barberos.map(b=>[b.barbero,b.ingresos,b.n+' cortes · '+mx(b.ingresos)]))}
 <h3>Horas con más citas</h3>${barras(H.map(h=>[h.hora,h.n]),n=>n+' citas')}<div class="ejes"><span>${H.length?H[0].hora:''}</span><span>${H.length?H[H.length-1].hora:''}</span></div>
 <h3>Clientes</h3>${hb([['Recurrentes',r.clientes.recurrentes,r.clientes.recurrentes+' clientes'],['Nuevos',nu,nu+' clientes']])}`}
-cargar();catalogo();ajustes();periodo();insights();
+cargar();catalogo();ajustes();periodo();insights();clientes();
 </script></body></html>
