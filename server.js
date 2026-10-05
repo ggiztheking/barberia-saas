@@ -19,13 +19,13 @@ const vigente = n => n.activo !== false && (!n.vence || new Date(n.vence) >= new
 const todas = n => Array.from({ length: n.hora_fin - n.hora_ini + 1 }, (_, k) => String(n.hora_ini + k).padStart(2, '0') + ':00');
 const cerrado = (n, f) => (n.cierra || '').split(',').includes(String(new Date(f + 'T12:00').getDay()));
 const avisa = (n, d) => {
-  const u = process.env.MAKE_WEBHOOK_URL, tel = wa(n.avisos || n.whatsapp);
-  if (!u || !tel) return;
+  const u = process.env.MAKE_WEBHOOK_URL, tel = wa(n.avisos || n.whatsapp), correo = n.correo || '';
+  if (!u || (!tel && !correo)) return;
   const f = new Date(d.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   const txt = d.evento === 'cita_cancelada'
     ? `Cita cancelada en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora}.`
     : `Nueva cita en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora} · $${Number(d.precio)}. WhatsApp del cliente: ${d.telefono}`;
-  fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, mensaje: txt }) }).catch(e => console.error('make:', e.message));
+  fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, avisar_correo: correo, asunto: (d.evento === 'cita_cancelada' ? 'Cita cancelada: ' : 'Nueva cita: ') + d.cliente + ' · ' + f + ' ' + d.hora, mensaje: txt }) }).catch(e => console.error('make:', e.message));
 };
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
 const SEED = [
@@ -54,6 +54,7 @@ const seed = async id => {
   await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS vence TIMESTAMPTZ');
   await pool.query("ALTER TABLE negocios ADD COLUMN IF NOT EXISTS cierra TEXT DEFAULT ''");
   await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS avisos TEXT');
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS correo TEXT');
   await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
   if (!o) {
@@ -62,6 +63,7 @@ const seed = async id => {
       [process.env.BARBEROS || 'Pedro,GGTHEBARBER', salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
   }
   await pool.query("UPDATE negocios SET plan='pro' WHERE slug='onyx' AND plan='prueba'");
+  if (process.env.CORREO_ONYX) await pool.query("UPDATE negocios SET correo=$1 WHERE slug='onyx' AND correo IS NULL", [process.env.CORREO_ONYX]);
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
   if (!(await pool.query('SELECT 1 FROM estilos WHERE negocio_id=$1', [o.id])).rowCount) await seed(o.id);
   await pool.query('DROP INDEX IF EXISTS citas_slot');
@@ -215,14 +217,14 @@ api.get('/admin/clientes', auth, wrap(async (q, s) => s.json((await pool.query(
    COUNT(*) FILTER (WHERE estado='completada')::int AS visitas, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float AS gastado,
    (MAX(fecha) FILTER (WHERE estado='completada'))::text AS ultima, (MIN(fecha) FILTER (WHERE estado='pendiente' AND fecha>=$2))::text AS proxima
    FROM citas WHERE negocio_id=$1 AND regexp_replace(telefono,'\\D','','g')<>'' GROUP BY 1 ORDER BY MAX(fecha) DESC LIMIT 300`, [q.neg.id, HOY()])).rows)));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, plan, vence, abierto: vigente(q.neg) }); });
+api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, plan, vence, abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
-  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null;
+  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null, correo = v('correo').toLowerCase().slice(0, 120);
   if (lista.length > lim) return s.status(400).json({ error: `Tu plan permite hasta ${lim} barberos` });
-  if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps)) || !/^([0-6](,[0-6])*)?$/.test(cierra)) return s.status(400).json({ error: 'Revisa los datos' });
-  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9 WHERE id=$10',
-    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, n.id]);
+  if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps)) || !/^([0-6](,[0-6])*)?$/.test(cierra) || (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) return s.status(400).json({ error: 'Revisa los datos' });
+  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9,correo=$10 WHERE id=$11',
+    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, correo || null, n.id]);
   s.json({ ok: true });
 }));
 

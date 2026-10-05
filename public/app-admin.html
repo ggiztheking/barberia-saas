@@ -1,5 +1,5 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=7"></head><body>
+<title>Administrador</title><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=8"></head><body>
 <header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a></nav></header><main>
 <div id="plan"></div>
 <h2>Resumen</h2><div class="chips" id="per"></div><div id="ins"></div>
@@ -30,7 +30,7 @@ async function agrega(t){try{await J('/admin/item',{tabla:t,nombre:$('#n-'+t).va
 async function borra(t,id){if(!confirm('¿Quitar este elemento?'))return;await J('/admin/borrar',{tabla:t,id},'POST');catalogo()}
 function banner(a){const d=a.vence?Math.ceil((new Date(a.vence)-Date.now())/864e5):null,P={prueba:'Prueba gratis',basico:'Plan Básico',pro:'Plan Pro'}[a.plan]||a.plan;
 $('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18px"><b>${esc(P)}</b> · ${!a.abierto?'Tu cuenta está vencida o suspendida y tus clientes no pueden agendar. Contáctanos para reactivarla.':d===null?'sin vencimiento':d+' días restantes'}</div>`}
-const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['avisos','WhatsApp para avisos de citas (si es distinto)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
+const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['correo','Correo para avisos de citas'],['avisos','WhatsApp para avisos de citas (si es distinto)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
 let BARS=[],SERV=[],NEG='',HI=10,HF=19,CL=[],FIL='todos';
 const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],opt=l=>l.map(x=>`<option>${esc(x)}</option>`).join(''),kp=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`;
 async function ajustes(){const a=await J('/admin/ajustes');banner(a);BARS=a.barberos.split(',').map(x=>x.trim()).filter(Boolean);NEG=a.nombre;HI=+a.hora_ini;HF=+a.hora_fin;
