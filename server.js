@@ -18,14 +18,23 @@ const wa = v => { const d = String(v || '').replace(/\D/g, ''); return d.length 
 const vigente = n => n.activo !== false && (!n.vence || new Date(n.vence) >= new Date());
 const todas = n => Array.from({ length: n.hora_fin - n.hora_ini + 1 }, (_, k) => String(n.hora_ini + k).padStart(2, '0') + ':00');
 const cerrado = (n, f) => (n.cierra || '').split(',').includes(String(new Date(f + 'T12:00').getDay()));
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const avisa = (n, d) => {
-  const u = process.env.MAKE_WEBHOOK_URL, tel = wa(n.avisos || n.whatsapp), correo = n.correo || '';
-  if (!u || (!tel && !correo)) return;
-  const f = new Date(d.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-  const txt = d.evento === 'cita_cancelada'
+  const u = process.env.MAKE_WEBHOOK_URL, k = process.env.RESEND_API_KEY, tel = wa(n.avisos || n.whatsapp), correo = n.correo || '', directo = !!(k && correo);
+  if (!directo && (!u || (!tel && !correo))) return;
+  const f = new Date(d.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }), cancel = d.evento === 'cita_cancelada';
+  const txt = cancel
     ? `Cita cancelada en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora}.`
     : `Nueva cita en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora} · $${Number(d.precio)}. WhatsApp del cliente: ${d.telefono}`;
-  fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, avisar_correo: correo, asunto: (d.evento === 'cita_cancelada' ? 'Cita cancelada: ' : 'Nueva cita: ') + d.cliente + ' · ' + f + ' ' + d.hora, mensaje: txt }) }).catch(e => console.error('make:', e.message));
+  const asunto = ((cancel ? 'Cita cancelada: ' : 'Nueva cita: ') + d.cliente + ' · ' + f + ' ' + d.hora).replace(/[\r\n]+/g, ' ').slice(0, 150);
+  if (directo) {
+    const html = `<p><strong>${esc(cancel ? 'Cita cancelada' : 'Nueva cita')} en ${esc(n.nombre)}</strong></p><p>Cliente: ${esc(d.cliente)}<br>WhatsApp: ${esc(d.telefono)}<br>Servicio: ${esc(d.servicio)} con ${esc(d.barbero)}<br>Fecha: ${esc(f)} a las ${esc(d.hora)}<br>Precio: $${Number(d.precio)} MXN</p><p>Agenda de ${esc(n.nombre)}</p>`;
+    fetch(process.env.RESEND_URL || 'https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: process.env.MAIL_FROM || 'Avisos de citas <onboarding@resend.dev>', to: [correo], subject: asunto, html }) })
+      .then(async r => { if (!r.ok) console.error('resend', r.status, (await r.text()).slice(0, 200)); }).catch(e => console.error('resend:', e.message));
+  }
+  if (u && (tel || (correo && !directo)))
+    fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, avisar_correo: directo ? '' : correo, asunto, mensaje: txt }) }).catch(e => console.error('make:', e.message));
 };
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
 const SEED = [
@@ -63,7 +72,14 @@ const seed = async id => {
       [process.env.BARBEROS || 'Pedro,GGTHEBARBER', salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
   }
   await pool.query("UPDATE negocios SET plan='pro' WHERE slug='onyx' AND plan='prueba'");
-  if (process.env.CORREO_ONYX) await pool.query("UPDATE negocios SET correo=$1 WHERE slug='onyx' AND correo IS NULL", [process.env.CORREO_ONYX]);
+  await pool.query('CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT)');
+  if (process.env.CORREO_ONYX) {
+    const c = (await pool.query("SELECT v FROM config WHERE k='correo_onyx'")).rows[0];
+    if (!c || c.v !== process.env.CORREO_ONYX) {
+      await pool.query("UPDATE negocios SET correo=$1 WHERE slug='onyx'", [process.env.CORREO_ONYX]);
+      await pool.query("INSERT INTO config(k,v) VALUES('correo_onyx',$1) ON CONFLICT (k) DO UPDATE SET v=$1", [process.env.CORREO_ONYX]);
+    }
+  }
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
   if (!(await pool.query('SELECT 1 FROM estilos WHERE negocio_id=$1', [o.id])).rowCount) await seed(o.id);
   await pool.query('DROP INDEX IF EXISTS citas_slot');
