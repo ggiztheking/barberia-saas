@@ -187,8 +187,8 @@ A('/info').then(i=>{
  // estado del día según el horario de citas (hora de Mérida)
  if(i.hora_ini!=null&&i.hora_fin!=null){const h=+new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hour12:false,timeZone:'America/Merida'}).format(new Date())%24,on=h>=i.hora_ini&&h<i.hora_fin;
   $('#ab').className='badge'+(on?' on':'');$('#ab').querySelector('span').textContent=on?'Recibiendo citas hoy hasta las '+hh(i.hora_fin):'Fuera de horario · agenda para mañana';$('#ab').hidden=false}
- if(i.fotos){$('#hero').classList.add('f');$('#himg').src='/img/hero.jpg';$('#hero').style.setProperty('--hbg','url(/img/hero.jpg)');$('#local').hidden=false;$('#nl').hidden=false}
- $('#team').innerHTML=i.barberos.map(b=>'<div class="bar"><div class="m">'+esc(b.trim().charAt(0).toUpperCase())+'</div><h3>'+esc(b)+'</h3><a class="ag" href="/'+N+'/agenda">Agendar</a></div>').join('');
+ const pt=i.portada?'/i/'+i.portada:i.fotos?'/img/hero.jpg':'';if(pt){$('#hero').classList.add('f');$('#himg').src=pt;$('#hero').style.setProperty('--hbg','url('+pt+')')}if(i.fotos){$('#local').hidden=false;$('#nl').hidden=false}
+ const FB=i.fotos_barberos||{};$('#team').innerHTML=i.barberos.map(b=>'<div class="bar">'+(FB[b]?'<div class="m" style="background:center/cover no-repeat url(/i/'+Number(FB[b])+');color:transparent">'+esc(b.trim().charAt(0))+'</div>':'<div class="m">'+esc(b.trim().charAt(0).toUpperCase())+'</div>')+'<h3>'+esc(b)+'</h3><a class="ag" href="/'+N+'/agenda">Agendar</a></div>').join('');
  $$('.bar .ag').forEach(a=>a.href='/'+N+'/agenda');
  const l=document.createElement('script');l.type='application/ld+json';l.text=JSON.stringify({'@context':'https://schema.org','@type':'HairSalon',name:i.nombre,telephone:i.whatsapp?'+'+i.whatsapp:undefined,hasMap:i.maps||undefined,address:{'@type':'PostalAddress',streetAddress:i.direccion||undefined,addressCountry:'MX'}});document.head.append(l)});
 

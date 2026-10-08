@@ -1,0 +1,36 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex">
+<title>Entrar</title><meta name="theme-color" content="#07090f"><link rel="icon" href="/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/s.css?v=12"></head><body>
+<div class="acceso"><div class="foto" id="foto"><div><p style="letter-spacing:.2em;text-transform:uppercase;font-size:12px;margin:0 0 8px">Panel de la barbería</p><h1 id="nom">&nbsp;</h1></div></div>
+<div class="forma">
+<form id="f-entrar" hidden><h2>Bienvenido</h2><p>Entra con el correo y la contraseña de tu cuenta.</p>
+<label for="e-mail">Correo</label><input id="e-mail" type="email" autocomplete="username" required>
+<label for="e-pw">Contraseña</label><div class="pw"><input id="e-pw" type="password" autocomplete="current-password" required><button type="button" data-ver="e-pw">Ver</button></div>
+<button type="submit">Entrar</button>
+<p style="margin-top:18px;font-size:15px"><button type="button" class="enlace" id="olv">¿Olvidaste tu contraseña?</button></p>
+<div id="ayuda" class="msg" hidden>Si eres barbero, pídele al dueño que te genere una contraseña nueva desde Ajustes → Equipo. Si eres el dueño, escríbenos y te damos una contraseña temporal.</div></form>
+<form id="f-config" hidden><h2>Crea tu cuenta</h2><p>Es la primera vez. Confirma con la contraseña actual del panel y crea tu acceso personal; desde aquí podrás invitar a tu equipo.</p>
+<label for="c-clave">Contraseña actual del panel</label><div class="pw"><input id="c-clave" type="password" autocomplete="off" required><button type="button" data-ver="c-clave">Ver</button></div>
+<label for="c-nom">Tu nombre</label><input id="c-nom" autocomplete="name" required>
+<label for="c-mail">Tu correo</label><input id="c-mail" type="email" autocomplete="username" required>
+<label for="c-pw">Nueva contraseña (mínimo 8)</label><div class="pw"><input id="c-pw" type="password" autocomplete="new-password" minlength="8" required><button type="button" data-ver="c-pw">Ver</button></div>
+<button type="submit">Crear mi cuenta</button></form>
+<div id="err" role="alert"></div>
+<p style="margin-top:26px;font-size:14px"><a style="color:var(--dim)" id="volver" href="#">← Volver a la página</a></p>
+</div></div>
+<script>
+const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const P=(u,b)=>fetch('/api/'+N+u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Algo salió mal');return d});
+$('#volver').href='/'+N;
+document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{const i=document.getElementById(b.dataset.ver);i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'Ver':'Ocultar'});
+$('#olv').onclick=()=>$('#ayuda').hidden=!$('#ayuda').hidden;
+const err=m=>$('#err').innerHTML=m?`<div class="msg" style="border-color:#5e3333;margin-top:16px">${esc(m)}</div>`:'';
+const envia=(f,fn)=>f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('[type=submit]'),t=b.textContent;b.disabled=true;b.textContent='Un momento…';err('');
+try{await fn();location.replace('/'+N+'/admin')}catch(x){err(x.message)}finally{b.disabled=false;b.textContent=t}};
+envia($('#f-entrar'),()=>P('/cuenta/entrar',{email:$('#e-mail').value,password:$('#e-pw').value}));
+envia($('#f-config'),()=>P('/cuenta/configurar',{clave:$('#c-clave').value,nombre:$('#c-nom').value,email:$('#c-mail').value,password:$('#c-pw').value}));
+(async()=>{try{const me=await fetch('/api/'+N+'/admin/me');if(me.ok)return location.replace('/'+N+'/admin')}catch(e){}
+try{const [i,e]=await Promise.all([fetch('/api/'+N+'/info').then(r=>r.json()),fetch('/api/'+N+'/cuenta/estado').then(r=>r.json())]);
+document.title='Entrar · '+i.nombre;$('#nom').textContent=i.nombre;const img=i.portada?'/i/'+i.portada:i.fotos?'/img/hero.jpg':'';if(img)$('#foto').style.backgroundImage=`url(${img})`;
+(e.configurado?$('#f-entrar'):$('#f-config')).hidden=false;(e.configurado?$('#e-mail'):$('#c-clave')).focus()}catch(x){err('No se pudo cargar. Revisa tu conexión.')}})();
+</script></body></html>

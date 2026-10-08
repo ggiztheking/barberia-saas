@@ -1,7 +1,7 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Agenda"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=10"></head><body>
-<header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mis citas</a></nav></header>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=12"></head><body>
+<header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mi cuenta</a></nav></header>
 <main>
 <section id="agendar"><div id="flujo">
 <h2>Agenda tu cita</h2><p>Unos cuantos toques y listo: tu lugar queda apartado al confirmar.</p>
@@ -14,7 +14,7 @@
 <div id="err" role="alert"></div></div><div id="hecho" hidden></div></section>
 <section id="estilos" hidden><h2>Estilos de corte</h2><div class="chips" id="filtros"></div><div class="grid" id="eg"></div></section>
 <section id="productos" hidden><h2>Productos</h2><p>Pregunta por ellos en tu próxima visita.</p><div class="grid" id="pg"></div></section>
-<section id="mis" hidden><h2>Mis citas</h2><div id="mlist"></div></section>
+<section id="mis" hidden><h2>Mi cuenta</h2><div id="mlist"></div></section>
 </main>
 <div class="barra" id="barra" hidden><div id="res"><b>Elige tu servicio</b>Paso 1 de 5</div><button id="go" disabled>Confirmar</button></div>
 <footer style="max-width:760px;margin:auto;padding:0 24px 40px;color:var(--dim)" id="fn"></footer>
@@ -35,10 +35,10 @@ const TIPOS=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['ser
 const chips=(el,act,fn)=>{el.innerHTML=TIPOS.filter(([k])=>k==='todos'||E.some(e=>e.tipo===k)).map(([k,t])=>`<button aria-pressed="${k===act}" data-k="${k}">${t}</button>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>fn(b.dataset.k))};
 function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${esc(e.nombre)}</h3><p>${esc(e.descripcion)}</p><b>${m(e.precio)}</b></div>`).join('');chips($('#filtros'),tipo,k=>{tipo=k;pintaE()})}
 function pintaS(){chips($('#fs'),ftipo,k=>{ftipo=k;pintaS()});
-$('#srv').innerHTML=E.filter(e=>ftipo==='todos'||e.tipo===ftipo).map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}"><strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
+$('#srv').innerHTML=E.filter(e=>ftipo==='todos'||e.tipo===ftipo).map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}">${e.img?`<span class="img" style="background-image:url(/i/${Number(e.img)})"></span>`:''}<strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
 $$('#srv .opt').forEach(b=>b.onclick=()=>{X.srv=E.find(e=>e.id==b.dataset.id);pintaS();estado();if(!X.bar)baja('#p2')})}
 function pintaB(){const L=I.barberos.length>1?[['cualquiera','Cualquiera','El primero disponible']]:[];I.barberos.forEach(b=>L.push([b,b,'']));
-$('#bar').innerHTML=L.map(([v,t,d])=>`<button class="opt" aria-pressed="${X.bar===v}" data-v="${esc(v)}"><span class="av">${v==='cualquiera'?'✦':esc(t.trim()[0]||'?').toUpperCase()}</span><strong>${esc(t)}</strong>${d?`<small>${d}</small>`:''}</button>`).join('');
+$('#bar').innerHTML=L.map(([v,t,d])=>`<button class="opt" aria-pressed="${X.bar===v}" data-v="${esc(v)}">${v!=='cualquiera'&&(I.fotos_barberos||{})[v]?`<span class="av ft" style="background-image:url(/i/${Number(I.fotos_barberos[v])})"></span>`:`<span class="av">${v==='cualquiera'?'✦':esc(t.trim()[0]||'?').toUpperCase()}</span>`}<strong>${esc(t)}</strong>${d?`<small>${d}</small>`:''}</button>`).join('');
 $$('#bar .opt').forEach(b=>b.onclick=()=>{X.bar=b.dataset.v;X.hora=null;pintaB();horas();estado();if(!X.dia)baja('#p3')})}
 function pintaD(){const c=(I.cierra||'').split(','),L=[];for(let k=0;k<14;k++){const d=new Date();d.setDate(d.getDate()+k);L.push([iso(d),d,c.includes(String(d.getDay()))])}
 $('#dias').innerHTML=L.map(([f,d,cz],k)=>`<button class="dia" data-f="${f}" aria-pressed="${X.dia===f}" ${cz?'disabled title="Cerrado"':''}><span>${k===0?'Hoy':k===1?'Mañana':d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${cz?'Cerrado':d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></button>`).join('');
@@ -63,20 +63,45 @@ try{const nom=$('#nom').value.trim(),tel=$('#tel').value.trim(),d=await J('/cita
 S.nom=nom;S.tel=tel;S.codigos.push(d.codigo);guarda();
 $('#hecho').innerHTML=`<div class="exito"><div class="check" aria-hidden="true">✓</div><h2 style="text-align:center">Te esperamos, ${esc(nom.split(' ')[0])}</h2><p>Tu cita quedó apartada.</p></div>
 <div class="ficha"><dl><dt>Servicio</dt><dd>${esc(X.srv.nombre)}</dd><dt>Barbero</dt><dd>${esc(d.barbero)}</dd><dt>Cuándo</dt><dd>${fd(X.dia)} · ${esc(X.hora)}</dd><dt>Total</dt><dd>${m(d.precio)}</dd>${I.direccion?`<dt>Dónde</dt><dd>${esc(I.direccion)}${I.maps?` · <a style="color:var(--gold)" href="${esc(I.maps)}">Cómo llegar</a>`:''}</dd>`:''}</dl></div>
-<div class="acc"><a class="btn" download="cita.ics" href="${ics(d.codigo,X.dia,X.hora)}">Agregar a mi calendario</a><a class="btn alt" href="#mis">Ver mis citas</a><button class="alt" id="otra">Agendar otra</button></div>
-<p style="margin-top:18px;font-size:14px">Si no puedes llegar, cambia o cancela tu cita desde "Mis citas".</p>`;
+<div class="acc"><a class="btn" download="cita.ics" href="${ics(d.codigo,X.dia,X.hora)}">Agregar a mi calendario</a><a class="btn alt" href="#mis">${YO?'Ver mi cuenta':'Ver mis citas'}</a><button class="alt" id="otra">Agendar otra</button></div>
+<p style="margin-top:18px;font-size:14px">Si no puedes llegar, cambia o cancela tu cita desde "Mi cuenta".${YO?'':' Crea tu cuenta ahí para verla desde cualquier celular.'}</p>`;
 $('#flujo').hidden=true;$('#hecho').hidden=false;ir();scrollTo({top:0,behavior:'smooth'});
 $('#otra').onclick=()=>{X={srv:null,bar:null,dia:null,hora:null};$('#hecho').hidden=true;$('#flujo').hidden=false;pintaS();pintaB();pintaD();horas();estado();ir();scrollTo({top:0})}}
 catch(e){$('#err').innerHTML=`<div class="msg" style="border-color:#5e3333">${esc(e.message)}</div>`;X.hora=null;horas();toast(e.message)}
 finally{g.textContent='Confirmar';estado()}};
-async function mis(){const el=$('#mlist');if(!S.codigos.length){el.innerHTML='<div class="vacio">Aquí verás tus próximas citas cuando agendes una. <a style="color:var(--gold)" href="#agendar">Agendar ahora</a></div>';return}
-el.innerHTML='<div class="vacio">Cargando…</div>';
-try{const c=await J('/mis-citas',{codigos:S.codigos}),P=c.filter(x=>x.estado==='pendiente');
-el.innerHTML=P.length?P.map(x=>{const d=new Date(x.fecha+'T12:00');return `<div class="cita" data-c="${esc(x.codigo)}"><div class="fecha"><span>${d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></div>
-<div class="info"><h3>${esc(x.servicio)}</h3><p>${esc(x.hora)} con ${esc(x.barbero)} · ${m(x.precio)}</p><div class="acc mini"><button class="alt" data-a="mover">Cambiar horario</button><button class="alt" data-a="cancelar">Cancelar</button></div></div><div class="mov" hidden></div></div>`}).join(''):'<div class="vacio">No tienes citas próximas. <a style="color:var(--gold)" href="#agendar">Agendar una</a></div>';
-el.querySelectorAll('.cita').forEach(k=>{const x=P.find(y=>y.codigo===k.dataset.c);
+let YO=null;
+const P=(u,b)=>J(u,b||{});
+const tarjeta=x=>{const d=new Date(x.fecha+'T12:00');return `<div class="cita" data-c="${esc(x.codigo)}"><div class="fecha"><span>${d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></div>
+<div class="info"><h3>${esc(x.servicio)}</h3><p>${esc(x.hora)} con ${esc(x.barbero)} · ${m(x.precio)}</p><div class="acc mini"><button class="alt" data-a="mover">Cambiar horario</button><button class="alt" data-a="cancelar">Cancelar</button></div></div><div class="mov" hidden></div></div>`};
+const acciones=(el,L)=>el.querySelectorAll('.cita[data-c]').forEach(k=>{const x=L.find(y=>y.codigo===k.dataset.c);if(!x)return;
 k.querySelector('[data-a=cancelar]').onclick=async()=>{if(!confirm('¿Cancelar tu cita del '+fd(x.fecha)+' a las '+x.hora+'?'))return;try{await J('/cancelar',{codigo:x.codigo});toast('Tu cita fue cancelada');mis()}catch(e){toast(e.message)}};
-k.querySelector('[data-a=mover]').onclick=()=>mover(k,x)})}catch(e){el.innerHTML='<div class="vacio">No se pudieron cargar tus citas. Revisa tu conexión.</div>'}}
+k.querySelector('[data-a=mover]').onclick=()=>mover(k,x)});
+const EST={pendiente:'Pendiente',completada:'Atendida',cancelada:'Cancelada',no_llego:'No llegó'};
+async function cargaYo(){try{const r=await fetch('/api/'+N+'/cliente/yo');YO=r.ok?await r.json():null}catch(e){YO=null}
+if(YO){$('#nom').value=YO.nombre;$('#tel').value=YO.telefono;estado()}return YO}
+async function mis(){const el=$('#mlist');el.innerHTML='<div class="vacio">Cargando…</div>';await cargaYo();
+if(YO){const h=YO.historial;
+el.innerHTML=`<div class="cuenta-cab"><span class="av">${esc((YO.nombre.trim()[0]||'?').toUpperCase())}</span><div style="flex:1"><b style="font-weight:400;font-size:19px">${esc(YO.nombre)}</b><br><small style="color:var(--dim)">${esc(YO.telefono)}</small></div><button class="alt" id="c-salir" style="padding:10px 14px;font-size:11px">Salir</button></div>
+<h3 style="margin:8px 0 12px">Próximas citas</h3>${YO.proximas.length?YO.proximas.map(tarjeta).join(''):'<div class="vacio">No tienes citas próximas. <a style="color:var(--gold)" href="#agendar">Agendar una</a></div>'}
+<h3 style="margin:30px 0 8px">Historial</h3>${h.length?h.map(x=>`<div class="hb" style="flex-wrap:wrap"><span style="flex:1;min-width:150px;white-space:normal">${esc(x.servicio)} con ${esc(x.barbero)}<br><small style="color:var(--dim)">${fd(x.fecha)} · ${esc(x.hora)}</small></span><span class="tag ${esc(x.estado)}">${EST[x.estado]||esc(x.estado)}</span></div>`).join(''):'<p>Aquí aparecerán tus visitas.</p>'}
+<details style="margin-top:30px"><summary style="cursor:pointer;color:var(--gold)">Editar mis datos</summary><div class="panel"><label for="y-n">Nombre</label><input id="y-n" value="${esc(YO.nombre)}"><label for="y-a">Contraseña actual (solo si la cambias)</label><input id="y-a" type="password" autocomplete="current-password"><label for="y-p">Nueva contraseña</label><input id="y-p" type="password" autocomplete="new-password"><button id="y-g">Guardar</button></div></details>`;
+acciones(el,YO.proximas);$('#c-salir').onclick=async()=>{await P('/cliente/salir');YO=null;toast('Sesión cerrada');mis()};
+$('#y-g').onclick=async()=>{try{await P('/cliente/datos',{nombre:$('#y-n').value,actual:$('#y-a').value,nueva:$('#y-p').value});toast('Datos guardados');mis()}catch(e){toast(e.message)}};return}
+let G=[];if(S.codigos.length)try{G=(await J('/mis-citas',{codigos:S.codigos})).filter(x=>x.estado==='pendiente')}catch(e){}
+el.innerHTML=(G.length?`<h3 style="margin:0 0 12px">Citas en este celular</h3>${G.map(tarjeta).join('')}`:'')+
+`<div class="panel" style="margin-top:${G.length?24:0}px"><div class="chips" id="modo"><button aria-pressed="true" data-m="entrar">Entrar</button><button aria-pressed="false" data-m="crear">Crear cuenta</button></div>
+<p id="modo-t">Entra para ver y manejar tus citas desde cualquier celular.</p>
+<div id="w-nom" hidden><label for="k-n">Nombre</label><input id="k-n" autocomplete="name"></div>
+<label for="k-t">WhatsApp</label><input id="k-t" inputmode="tel" autocomplete="tel" placeholder="10 dígitos" value="${esc(S.tel||'')}">
+<label for="k-p">Contraseña</label><div class="pw"><input id="k-p" type="password" autocomplete="current-password"><button type="button" id="k-v">Ver</button></div>
+<button id="k-go" style="width:100%">Entrar</button>
+<p style="margin-top:14px;font-size:14px" id="k-olv">¿Olvidaste tu contraseña? ${I.whatsapp?`<a style="color:var(--gold)" href="https://wa.me/${esc(I.whatsapp)}?text=${encodeURIComponent('Hola, olvidé mi contraseña para agendar. ¿Me ayudan?')}">Pídela por WhatsApp</a>`:'Pídela en la barbería'} y te damos una temporal.</p></div>`;
+acciones(el,G);let modo='entrar';
+const pon=k=>{modo=k;$$('#modo button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===k));$('#w-nom').hidden=k!=='crear';$('#k-go').textContent=k==='crear'?'Crear mi cuenta':'Entrar';
+$('#modo-t').textContent=k==='crear'?'Tus citas quedan guardadas en tu cuenta y se llenan tus datos solos.':'Entra para ver y manejar tus citas desde cualquier celular.';$('#k-p').autocomplete=k==='crear'?'new-password':'current-password';$('#k-olv').hidden=k==='crear';
+if(k==='crear'&&!$('#k-n').value)$('#k-n').value=S.nom||''};
+$$('#modo button').forEach(b=>b.onclick=()=>pon(b.dataset.m));$('#k-v').onclick=()=>{const i=$('#k-p');i.type=i.type==='password'?'text':'password';$('#k-v').textContent=i.type==='password'?'Ver':'Ocultar'};
+$('#k-go').onclick=async()=>{const g=$('#k-go');g.disabled=true;try{await P(modo==='crear'?'/cliente/registro':'/cliente/entrar',{nombre:$('#k-n').value,telefono:$('#k-t').value,password:$('#k-p').value,codigos:S.codigos});toast(modo==='crear'?'¡Cuenta creada!':'¡Bienvenido!');mis()}catch(e){toast(e.message)}finally{g.disabled=false}}}
 function mover(k,x){const v=k.querySelector('.mov');if(!v.hidden){v.hidden=true;return}v.hidden=false;let f=null,h=null;const c=(I.cierra||'').split(',');
 const dias=()=>{const L=[];for(let i=0;i<14;i++){const d=new Date();d.setDate(d.getDate()+i);L.push([iso(d),d,c.includes(String(d.getDay()))])}
 return `<div class="franja">Nuevo día</div><div class="dias">${L.map(([g,d,cz])=>`<button class="dia" data-f="${g}" aria-pressed="${f===g}" ${cz?'disabled':''}><span>${d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${cz?'Cerrado':d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></button>`).join('')}</div><div class="hh"></div><div class="acc mini" style="margin-top:12px"><button data-ok disabled>Guardar cambio</button></div>`};
@@ -91,5 +116,5 @@ $('#nom').value=S.nom||'';$('#tel').value=S.tel||'';
 E=await J('/estilos');pintaE();
 $('#pg').innerHTML=(await J('/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
 if(!I.abierto){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">Esta barbería no está recibiendo citas en línea por ahora.'+(I.whatsapp?' Escríbenos por <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>.':'')+'</div>';ir();return}
-if(I.barberos.length===1)X.bar=I.barberos[0];pintaS();pintaB();pintaD();horas();estado();ir()})();
+if(I.barberos.length===1)X.bar=I.barberos[0];pintaS();pintaB();pintaD();horas();estado();ir();cargaYo()})();
 </script></body></html>
