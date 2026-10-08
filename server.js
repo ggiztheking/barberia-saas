@@ -273,6 +273,11 @@ app.get('/:slug', existe, page('negocio.html'));
 app.get('/:slug/agenda', existe, page('app-agenda.html'));
 app.get('/:slug/admin', existe, page('app-admin.html'));
 app.get('/:slug/cartel', existe, page('cartel.html'));
-app.get('/:slug/manifest.json', existe, (q, s) => s.json({ name: 'Agenda de barbería', short_name: 'Barbería', start_url: `/${q.params.slug}/agenda`, display: 'standalone',
-  background_color: '#07090f', theme_color: '#07090f', lang: 'es', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }] }));
+app.get('/:slug/manifest.json', existe, wrap(async (q, s) => {
+  const n = (await pool.query('SELECT nombre FROM negocios WHERE slug=$1', [q.params.slug])).rows[0].nombre;
+  s.type('application/manifest+json').json({ id: `/${q.params.slug}`, name: n, short_name: n.slice(0, 12), description: 'Agenda tu cita en ' + n, start_url: `/${q.params.slug}/agenda?app=1`, scope: '/', display: 'standalone', orientation: 'portrait',
+    background_color: '#07090f', theme_color: '#07090f', lang: 'es', categories: ['lifestyle', 'business'],
+    icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
+    shortcuts: [{ name: 'Agendar cita', url: `/${q.params.slug}/agenda?app=1` }] });
+}));
 app.listen(process.env.PORT || 3000);

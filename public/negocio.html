@@ -1,37 +1,180 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Barbería</title><meta name="description" content="Agenda tu cita en línea. Cortes clásicos y las tendencias más nuevas.">
-<link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=6">
+<title>Barbería</title><meta name="description" content="Agenda tu cita en línea. Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.">
+<meta property="og:type" content="website"><meta property="og:title" content="Barbería"><meta property="og:description" content="Agenda tu cita en línea. Cortes clásicos y las tendencias más nuevas.">
+<link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=7">
 <style>
-.hero{min-height:92vh;display:flex;align-items:flex-end;background:linear-gradient(180deg,#07090f33 10%,#07090f 96%)}
-.hero div,.b{max-width:760px;margin:auto;width:100%;padding:0 24px}.hero div{padding-bottom:72px}
-.hero h1{font-size:clamp(44px,11vw,84px);font-weight:400;margin:0 0 18px}.hero p{color:var(--ink);font-size:19px;max-width:26em;margin-bottom:30px}
-.b{padding-top:96px}.menu h3{color:var(--gold);font-style:italic;font-weight:500;font-size:25px;margin:32px 0 6px}
-.menu ul{list-style:none;margin:0;padding:0}.menu li{display:flex;gap:12px;align-items:baseline;padding:9px 0;font-size:18px}
-.menu li i{flex:1;border-bottom:1px solid var(--line)}.menu li b{color:var(--gold);font:600 23px 'Cormorant Garamond',Georgia,serif}
-.hexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px;margin-top:6px}
-.hexs img{width:100%;aspect-ratio:1/.9;object-fit:cover;display:block;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
-.b .btn,.cta .btn{margin:0 8px 10px 0}header .btn{padding:12px 20px}
-.cta{margin-top:110px;padding:84px 24px;text-align:center;border-top:1px solid var(--line)}.cta h2::before{margin:0 auto 14px}
-footer{padding:28px 24px 48px;text-align:center;color:var(--dim);font-size:14px;letter-spacing:.08em}
+:root{--gold2:#e3cd8e;--glass:#07090fcc}
+body{overflow-x:hidden}
+.w{max-width:1080px;margin:auto;width:100%;padding:0 24px}
+/* encabezado fijo */
+header.top{position:fixed;inset:0 0 auto 0;z-index:20;background:transparent;border-bottom:1px solid transparent;transition:background .3s,border-color .3s,backdrop-filter .3s;padding:16px 24px}
+header.top.sc{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-color:var(--line)}
+header.top .logo{font-size:22px;text-decoration:none;letter-spacing:.28em;text-transform:uppercase}
+header.top .btn{padding:12px 20px}
+@media(max-width:820px){header.top nav{display:none}header.top{flex-wrap:nowrap}header.top .logo{font-size:17px;letter-spacing:.2em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+/* portada */
+.hero{position:relative;min-height:100svh;display:flex;align-items:center;padding:110px 0 70px;overflow:hidden;background:radial-gradient(900px 500px at 78% 30%,#c2a45f1f,transparent 70%),var(--bg)}
+.hero .w{position:relative;z-index:2;display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
+.hero .tx{padding:0}
+.eyebrow{font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);margin:0 0 20px;display:flex;align-items:center;gap:14px}
+.eyebrow::before{content:"";width:36px;height:1px;background:var(--gold)}
+.hero h1{font-size:clamp(46px,9vw,96px);font-weight:400;line-height:.98;margin:0 0 22px}
+.hero h1 em{font-style:italic;color:var(--gold2)}
+.hero .lead{color:var(--ink);font-size:19px;max-width:27em;margin-bottom:32px;opacity:.92}
+.hero .btn{margin:0 10px 12px 0}
+.facts{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:30px;padding-top:24px;border-top:1px solid var(--line);font-size:14px;letter-spacing:.06em;color:var(--dim)}
+.facts span::before{content:"◆";color:var(--gold);font-size:9px;margin-right:9px;vertical-align:2px}
+.inst{margin:0 10px 12px 0}.ios{font-size:14px;margin:4px 0 0;max-width:26em}
+.shot{position:relative;display:none;aspect-ratio:3/4;max-height:640px;justify-self:end;width:100%;max-width:440px}
+.shot::before{content:"";position:absolute;inset:18px -18px -18px 18px;border:1px solid var(--gold);opacity:.55}
+.shot img{position:relative;width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block;filter:saturate(1.05) contrast(1.03)}
+.hero.f .shot{display:block}
+@media(max-width:900px){
+ .hero .w{grid-template-columns:1fr}
+ .hero.f{background:linear-gradient(180deg,#07090f99 0%,#07090fe6 60%,#07090f 100%),var(--hbg,none) center 20%/cover no-repeat,var(--bg)}
+ .hero.f .shot{display:none}
+ .hero{align-items:flex-end}
+}
+@media(min-width:901px){.hero:not(.f) .w{grid-template-columns:1fr}.hero:not(.f) .tx{max-width:760px}}
+/* secciones */
+section.s{padding:104px 0 0}
+.sh{display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap;margin-bottom:34px}
+.sh h2{margin:0}.sh p{margin:0;max-width:30em}
+/* servicios */
+.chips{margin:0 0 28px}
+.chips button{padding:12px 20px}
+.sv{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.sv article{background:var(--bg);padding:24px 26px;display:flex;flex-direction:column;gap:6px;transition:background .25s}
+.sv article:hover{background:var(--panel)}
+.sv .r{display:flex;align-items:baseline;gap:12px}.sv .r h3{font-size:24px}.sv .r i{flex:1;border-bottom:1px dotted #3a4258;transform:translateY(-4px)}
+.sv .r b{color:var(--gold);font:600 26px 'Cormorant Garamond',Georgia,serif}
+.sv p{margin:0;font-size:15px}
+.note{margin-top:18px;font-size:14px}
+/* barberos */
+.team{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px}
+.bar{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),#090c14);padding:34px 22px;text-align:center;transition:border-color .25s,transform .25s}
+.bar:hover{border-color:var(--gold);transform:translateY(-3px)}
+.bar .m{width:84px;height:84px;margin:0 auto 18px;display:grid;place-items:center;font:500 38px 'Cormorant Garamond',Georgia,serif;color:var(--gold);background:#c2a45f14;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+.bar h3{font-size:26px;margin-bottom:12px}.bar a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);text-decoration:none;border-bottom:1px solid var(--gold);padding-bottom:3px}
+/* local */
+.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.gl button{padding:0;border:0;background:none;cursor:zoom-in;overflow:hidden;position:relative;aspect-ratio:4/5;display:block}
+.gl button:hover{background:none}
+.gl img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s,filter .3s;filter:brightness(.92)}
+.gl button:hover img{transform:scale(1.05);filter:brightness(1)}
+.gl .w2{grid-column:span 2;aspect-ratio:auto}
+@media(max-width:560px){.gl .w2{grid-column:auto;aspect-ratio:4/5}}
+dialog.lb{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh;overflow:visible}
+dialog.lb::backdrop{background:#000d}
+dialog.lb img{max-width:96vw;max-height:88vh;display:block;margin:auto}
+dialog.lb button{position:absolute;top:-44px;right:0;padding:10px 16px}
+/* productos */
+.pr{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+.pr article{border:1px solid var(--line);padding:22px}.pr h3{font-size:22px}.pr p{font-size:14px;margin:6px 0 12px}.pr b{color:var(--gold);font:600 24px 'Cormorant Garamond',Georgia,serif}
+/* ubicación */
+.ub{display:grid;grid-template-columns:1fr 1fr;gap:40px;border:1px solid var(--line);padding:44px;background:linear-gradient(135deg,var(--panel),#090c14)}
+@media(max-width:760px){.ub{grid-template-columns:1fr;padding:30px 24px;gap:24px}}
+.ub h3{font-size:14px;letter-spacing:.2em;text-transform:uppercase;font-family:'Jost',sans-serif;color:var(--gold);margin-bottom:10px;font-weight:400}
+.ub .big{font:500 28px/1.25 'Cormorant Garamond',Georgia,serif;color:var(--ink);margin:0 0 20px}
+.ub .btn{margin:0 10px 10px 0}
+/* cierre */
+.cta{margin-top:120px;padding:96px 24px;text-align:center;border-top:1px solid var(--line);background:radial-gradient(700px 300px at 50% 0,#c2a45f18,transparent 70%)}
+.cta h2{font-size:clamp(34px,6vw,56px)}.cta h2::before{margin:0 auto 18px}.cta p{margin-bottom:28px}
+footer{padding:30px 24px 110px;text-align:center;color:var(--dim);font-size:13px;letter-spacing:.1em}
+footer a{color:var(--dim)}
+/* WhatsApp flotante y barra móvil */
+.wf{position:fixed;right:18px;bottom:18px;z-index:15;width:56px;height:56px;border-radius:50%;background:#25d366;display:grid;place-items:center;box-shadow:0 8px 24px #000a;transition:transform .2s}
+.wf:hover{transform:scale(1.08)}.wf svg{width:30px;height:30px;fill:#fff}
+.mb{display:none}
+@media(max-width:820px){
+ .mb{position:fixed;left:0;right:0;bottom:0;z-index:14;display:block;padding:10px 84px 10px 16px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+ .mb .btn{display:block;text-align:center;width:100%}
+ .wf{bottom:12px;right:14px;width:52px;height:52px}
+}
+/* animación al hacer scroll (solo si hay JS y movimiento permitido) */
+@media(prefers-reduced-motion:no-preference){
+ .js .rv{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+ .js .rv.in{opacity:1;transform:none}
+ .hero .tx{animation:fi .9s ease both}
+}
 </style></head><body>
-<header><a class="logo" id="logo" href="#"></a><nav><a href="#servicios">Servicios</a><a href="#ubicacion">Ubicación</a></nav><a class="btn ag" href="#">Agendar</a></header>
-<div class="hero" id="hero"><div><h1 id="nom"></h1><p>Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.</p><a class="btn ag" href="#">Agendar mi cita</a><a class="btn alt wa" href="#">WhatsApp</a></div></div>
-<section class="b menu" id="servicios"><h2>Servicios y precios</h2><div id="menu"></div></section>
-<section class="b" id="barberos"><h2>Tus barberos</h2><div class="grid" id="team"></div><p>Elige a tu barbero al agendar y el horario se aparta al instante.</p></section>
-<section class="b" id="local" hidden><h2>El local</h2><div class="hexs"><img loading="lazy" src="/img/techo.jpg" alt="Luces hexagonales y logo en la pared"><img loading="lazy" src="/img/vip.jpg" alt="Silla VIP"><img loading="lazy" src="/img/recepcion.jpg" alt="Recepción y estación de trabajo"><img loading="lazy" src="/img/bienvenido.jpg" alt="Entrada con tapete de bienvenida"></div></section>
-<section class="b" id="ubicacion"><h2>Dónde estamos</h2><p id="dir"></p><a class="btn mp" href="#">Cómo llegar</a> <a class="btn alt wa" href="#">Escríbenos por WhatsApp</a></section>
-<div class="cta"><h2>¿Listo para tu corte?</h2><p>Agenda en menos de un minuto, desde tu celular.</p><a class="btn ag" href="#">Agendar mi cita</a></div>
+<header class="top" id="hd"><a class="logo" id="logo" href="#"></a><nav><a href="#servicios">Servicios</a><a href="#barberos">Barberos</a><a href="#local" id="nl" hidden>El local</a><a href="#productos" id="np" hidden>Productos</a><a href="#ubicacion">Ubicación</a></nav><a class="btn ag" href="#">Agendar</a></header>
+
+<div class="hero" id="hero"><div class="w">
+ <div class="tx"><p class="eyebrow">Barbería</p><h1 id="nom"></h1><p class="lead">Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.</p>
+  <a class="btn ag" href="#">Agendar mi cita</a><a class="btn alt wa" href="#">WhatsApp</a><button type="button" class="alt inst" hidden>Instalar app</button><p class="ios" hidden>Para instalar la app: toca <b>Compartir</b> y luego <b>Añadir a pantalla de inicio</b>.</p>
+  <div class="facts"><span>Agenda en línea</span><span>Elige a tu barbero</span><span id="hf" hidden></span></div></div>
+ <div class="shot"><img id="himg" alt="Interior de la barbería con luces hexagonales y silla VIP" fetchpriority="high"></div>
+</div></div>
+
+<section class="s" id="servicios"><div class="w rv"><div class="sh"><h2>Servicios y precios</h2><p>Todos los cortes incluyen perfilado y acabado. Elige el tuyo y agenda en un minuto.</p></div><div class="chips" id="tabs" role="group" aria-label="Categorías"></div><div class="sv" id="menu"></div></div></section>
+
+<section class="s" id="barberos"><div class="w rv"><div class="sh"><h2>Tus barberos</h2><p>Elige a tu barbero al agendar y el horario se aparta al instante.</p></div><div class="team" id="team"></div></div></section>
+
+<section class="s" id="local" hidden><div class="w rv"><div class="sh"><h2>El local</h2><p>Un espacio pensado para que cortarte el cabello sea una experiencia.</p></div>
+ <div class="gl"><button type="button" class="w2"><img loading="lazy" src="/img/techo.jpg" alt="Luces hexagonales y logo en la pared"></button><button type="button"><img loading="lazy" src="/img/vip.jpg" alt="Silla VIP"></button><button type="button"><img loading="lazy" src="/img/recepcion.jpg" alt="Recepción y estación de trabajo"></button><button type="button"><img loading="lazy" src="/img/bienvenido.jpg" alt="Entrada con tapete de bienvenida"></button></div></div></section>
+
+<section class="s" id="productos" hidden><div class="w rv"><div class="sh"><h2>Productos</h2><p>Lleva a casa el acabado de tu corte. Pregunta por ellos en el local.</p></div><div class="pr" id="prod"></div></div></section>
+
+<section class="s" id="ubicacion"><div class="w rv"><div class="sh"><h2>Dónde estamos</h2></div>
+ <div class="ub"><div><h3>Dirección</h3><p class="big" id="dir"></p><a class="btn mp" href="#">Cómo llegar</a><a class="btn alt wa" href="#">Escríbenos</a></div>
+ <div><h3>Horario</h3><p class="big" id="hor">Agenda en línea las 24 horas</p><p>Reserva tu horario desde el celular; si necesitas cambiarlo, cancela desde tu cita y vuelve a agendar.</p><a class="btn ag" href="#">Agendar mi cita</a></div></div></div></section>
+
+<div class="cta rv"><h2>¿Listo para tu corte?</h2><p>Agenda en menos de un minuto, desde tu celular.</p><a class="btn ag" href="#">Agendar mi cita</a></div>
 <footer id="fn"></footer>
+
+<a class="wf wa" href="#" aria-label="Escribir por WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3C9 3 3.4 8.6 3.4 15.5c0 2.3.6 4.4 1.7 6.3L3 29l7.4-2c1.8 1 3.8 1.500 5.700 1.500h0C23 28.500 28.600 22.900 28.600 16S23 3 16 3zm0 23.300c-1.800 0-3.600-.5-5.100-1.400l-.4-.2-4.400 1.200 1.200-4.300-.3-.4a10.400 10.400 0 0 1-1.600-5.600C5.400 9.800 10.200 5.200 16 5.200S26.500 9.900 26.500 15.700 21.800 26.300 16 26.300zm5.700-7.800c-.3-.2-1.900-.9-2.200-1s-.5-.2-.7.200-.8 1-1 1.200-.4.200-.7.100a8.600 8.600 0 0 1-4.300-3.800c-.3-.6.300-.5.900-1.700.1-.2 0-.4 0-.5l-1-2.300c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.100-.8.400s-1 1-1 2.500 1.100 2.900 1.200 3.100 2.100 3.300 5.200 4.600c.7.300 1.300.5 1.700.6.700.2 1.400.2 1.900.1.600-.1 1.900-.8 2.100-1.500.3-.7.300-1.400.2-1.500l-.5-.3z"/></svg></a>
+<div class="mb"><a class="btn ag" href="#">Agendar mi cita</a></div>
+<dialog class="lb" id="lb"><button type="button" id="lbx">Cerrar</button><img id="lbi" alt=""></dialog>
+
 <script>
-const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),m=x=>'$'+Number(x),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+document.documentElement.classList.add('js');
+const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],m=x=>'$'+Number(x),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const A=u=>fetch('/api/'+N+u).then(r=>r.json());
-$('link[rel=manifest]').href='/'+N+'/manifest.json';document.querySelectorAll('.ag').forEach(a=>a.href='/'+N+'/agenda');
-A('/info').then(i=>{document.title=i.nombre+' · Barbería';$('#logo').textContent=i.nombre;$('#nom').textContent=i.nombre;$('#dir').textContent=i.direccion||'';$('#fn').textContent=i.nombre+(i.direccion?' · '+i.direccion:'');
-const w=i.whatsapp?'https://wa.me/'+i.whatsapp+'?text='+encodeURIComponent('Hola, quiero información de '+i.nombre):'';
-document.querySelectorAll('.wa').forEach(a=>w?a.href=w:a.hidden=true);document.querySelectorAll('.mp').forEach(a=>i.maps?a.href=i.maps:a.hidden=true);
-if(i.fotos){$('#hero').style.background='linear-gradient(180deg,#07090f33 10%,#07090f 96%),url(/img/hero.jpg) center 28%/cover';$('#local').hidden=false}
-$('#team').innerHTML=i.barberos.map(b=>'<div class="card"><h3>'+esc(b)+'</h3></div>').join('');
-const l=document.createElement('script');l.type='application/ld+json';l.text=JSON.stringify({'@context':'https://schema.org','@type':'HairSalon',name:i.nombre,telephone:i.whatsapp?'+'+i.whatsapp:undefined,hasMap:i.maps||undefined,address:{'@type':'PostalAddress',streetAddress:i.direccion||undefined,addressCountry:'MX'}});document.head.append(l)});
-A('/estilos').then(E=>{$('#menu').innerHTML=[['clásico','Cortes clásicos'],['nuevo','Las tendencias'],['servicio','Barba y combos']].map(([k,t])=>'<h3>'+t+'</h3><ul>'+E.filter(e=>e.tipo===k).map(e=>'<li>'+esc(e.nombre)+'<i></i><b>'+m(e.precio)+'</b></li>').join('')+'</ul>').join('')});
+$('link[rel=manifest]').href='/'+N+'/manifest.json';
+// app instalable (PWA)
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+let dip=null;const stand=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;if(!stand)$('.inst').hidden=false});
+$('.inst').onclick=async()=>{if(!dip)return;dip.prompt();await dip.userChoice;dip=null;$('.inst').hidden=true};
+addEventListener('appinstalled',()=>{$('.inst').hidden=true;$('.ios').hidden=true});
+if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!stand)$('.ios').hidden=false;
+$$('.ag').forEach(a=>a.href='/'+N+'/agenda');
+
+// encabezado: se rellena al hacer scroll
+const hd=$('#hd'),sc=()=>hd.classList.toggle('sc',scrollY>30);addEventListener('scroll',sc,{passive:true});sc();
+// aparición al hacer scroll
+const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.08}):null;
+$$('.rv').forEach(e=>io?io.observe(e):e.classList.add('in'));
+
+// visor de fotos del local
+const lb=$('#lb');$$('.gl button').forEach(b=>b.onclick=()=>{const i=b.querySelector('img');$('#lbi').src=i.src;$('#lbi').alt=i.alt;lb.showModal?lb.showModal():0});
+$('#lbx').onclick=()=>lb.close();lb.onclick=e=>{if(e.target===lb)lb.close()};
+
+const hh=h=>String(h).padStart(2,'0')+':00';
+A('/info').then(i=>{
+ const tt=/barber/i.test(i.nombre)?i.nombre:i.nombre+' · Barbería';document.title=tt;$('meta[property="og:title"]').content=tt;
+ $('#logo').textContent=i.nombre;$('#fn').textContent=i.nombre+(i.direccion?' · '+i.direccion:'');
+ const p=i.nombre.trim().split(/\s+/);$('#nom').innerHTML=p.length>1?esc(p.slice(0,-1).join(' '))+' <em>'+esc(p.at(-1))+'</em>':esc(i.nombre);
+ $('#dir').textContent=i.direccion||'Consulta cómo llegar';
+ const w=i.whatsapp?'https://wa.me/'+i.whatsapp+'?text='+encodeURIComponent('Hola, quiero información de '+i.nombre):'';
+ $$('.wa').forEach(a=>w?a.href=w:a.hidden=true);$$('.mp').forEach(a=>i.maps?a.href=i.maps:a.hidden=true);
+ if(i.hora_ini!=null&&i.hora_fin!=null){const t=hh(i.hora_ini)+' a '+hh(i.hora_fin);$('#hf').textContent='Citas de '+t;$('#hf').hidden=false;$('#hor').textContent=t}
+ if(i.fotos){$('#hero').classList.add('f');$('#himg').src='/img/hero.jpg';$('#hero').style.setProperty('--hbg','url(/img/hero.jpg)');$('#local').hidden=false;$('#nl').hidden=false}
+ $('#team').innerHTML=i.barberos.map(b=>'<div class="bar"><div class="m">'+esc(b.trim().charAt(0).toUpperCase())+'</div><h3>'+esc(b)+'</h3><a class="ag" href="/'+N+'/agenda">Agendar</a></div>').join('');
+ $$('.bar .ag').forEach(a=>a.href='/'+N+'/agenda');
+ const l=document.createElement('script');l.type='application/ld+json';l.text=JSON.stringify({'@context':'https://schema.org','@type':'HairSalon',name:i.nombre,telephone:i.whatsapp?'+'+i.whatsapp:undefined,hasMap:i.maps||undefined,address:{'@type':'PostalAddress',streetAddress:i.direccion||undefined,addressCountry:'MX'}});document.head.append(l)});
+
+// servicios con pestañas
+const TT={'clásico':'Cortes clásicos','nuevo':'Las tendencias','servicio':'Barba y combos'};
+A('/estilos').then(E=>{
+ const ks=[...new Set(E.map(e=>e.tipo))].sort((a,b)=>Object.keys(TT).indexOf(a)-Object.keys(TT).indexOf(b));
+ const show=k=>{$('#menu').innerHTML=E.filter(e=>e.tipo===k).map(e=>'<article><div class="r"><h3>'+esc(e.nombre)+'</h3><i></i><b>'+m(e.precio)+'</b></div>'+(e.descripcion?'<p>'+esc(e.descripcion)+'</p>':'')+'</article>').join('');
+  $$('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===k))};
+ $('#tabs').innerHTML=ks.map(k=>'<button type="button" data-k="'+esc(k)+'">'+esc(TT[k]||k)+'</button>').join('');
+ $$('#tabs button').forEach(b=>b.onclick=()=>show(b.dataset.k));if(ks.length)show(ks[0])});
+
+// productos (solo si el negocio tiene)
+A('/productos').then(P=>{if(!P.length)return;$('#prod').innerHTML=P.map(x=>'<article><h3>'+esc(x.nombre)+'</h3>'+(x.descripcion?'<p>'+esc(x.descripcion)+'</p>':'')+'<b>'+m(x.precio)+'</b></article>').join('');$('#productos').hidden=false;$('#np').hidden=false});
 </script></body></html>
