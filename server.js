@@ -23,13 +23,13 @@ const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const avisa = (n, d) => {
   const u = process.env.MAKE_WEBHOOK_URL, k = process.env.RESEND_API_KEY, tel = wa(n.avisos || n.whatsapp), correo = n.correo || '', directo = !!(k && correo);
   if (!directo && (!u || (!tel && !correo))) return;
-  const f = new Date(d.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }), cancel = d.evento === 'cita_cancelada';
-  const txt = cancel
+  const f = new Date(d.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }), cancel = d.evento === 'cita_cancelada', mueve = d.evento === 'cita_reprogramada';
+  const txt = mueve ? `Cita reprogramada en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ahora ${f} a las ${d.hora} (antes ${d.antes}).` : cancel
     ? `Cita cancelada en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora}.`
     : `Nueva cita en ${n.nombre}: ${d.cliente} · ${d.servicio} con ${d.barbero} · ${f} a las ${d.hora} · $${Number(d.precio)}. WhatsApp del cliente: ${d.telefono}`;
-  const asunto = ((cancel ? 'Cita cancelada: ' : 'Nueva cita: ') + d.cliente + ' · ' + f + ' ' + d.hora).replace(/[\r\n]+/g, ' ').slice(0, 150);
+  const asunto = ((mueve ? 'Cita reprogramada: ' : cancel ? 'Cita cancelada: ' : 'Nueva cita: ') + d.cliente + ' · ' + f + ' ' + d.hora).replace(/[\r\n]+/g, ' ').slice(0, 150);
   if (directo) {
-    const html = `<p><strong>${esc(cancel ? 'Cita cancelada' : 'Nueva cita')} en ${esc(n.nombre)}</strong></p><p>Cliente: ${esc(d.cliente)}<br>WhatsApp: ${esc(d.telefono)}<br>Servicio: ${esc(d.servicio)} con ${esc(d.barbero)}<br>Fecha: ${esc(f)} a las ${esc(d.hora)}<br>Precio: $${Number(d.precio)} MXN</p><p>Agenda de ${esc(n.nombre)}</p>`;
+    const html = `<p><strong>${esc(mueve ? 'Cita reprogramada' : cancel ? 'Cita cancelada' : 'Nueva cita')} en ${esc(n.nombre)}</strong></p>${mueve ? `<p>Antes: ${esc(d.antes)}</p>` : ''}<p>Cliente: ${esc(d.cliente)}<br>WhatsApp: ${esc(d.telefono)}<br>Servicio: ${esc(d.servicio)} con ${esc(d.barbero)}<br>Fecha: ${esc(f)} a las ${esc(d.hora)}<br>Precio: $${Number(d.precio)} MXN</p><p>Agenda de ${esc(n.nombre)}</p>`;
     fetch(process.env.RESEND_URL || 'https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: process.env.MAIL_FROM || 'Avisos de citas <onboarding@resend.dev>', to: [correo], subject: asunto, html }) })
       .then(async r => { if (!r.ok) console.error('resend', r.status, (await r.text()).slice(0, 200)); }).catch(e => console.error('resend:', e.message));
@@ -37,6 +37,14 @@ const avisa = (n, d) => {
   if (u && (tel || (correo && !directo)))
     fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, avisar_correo: directo ? '' : correo, asunto, mensaje: txt }) }).catch(e => console.error('make:', e.message));
 };
+const ahoraH = () => +new Date().toLocaleString('en-US', { timeZone: 'America/Merida', hour: '2-digit', hourCycle: 'h23' });
+const ocupadas = async (n, fecha, barbero) => {
+  if (cerrado(n, fecha)) return new Set(todas(n));
+  const r = await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [n.id, fecha, barbero]);
+  const b = await pool.query('SELECT hora FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3', [n.id, fecha, barbero]);
+  return b.rows.some(x => x.hora === null) ? new Set(todas(n)) : new Set([...r.rows, ...b.rows].map(x => x.hora));
+};
+const elige = async (n, fecha, hora) => { for (const b of bars(n)) if (!(await ocupadas(n, fecha, b)).has(hora)) return b; return null; };
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
 const SEED = [
  ['Taper clásico','clásico','Laterales degradados suaves y largo natural arriba.',200],['Corte a tijera','clásico','Todo el corte con tijera, acabado natural.',200],
@@ -145,30 +153,30 @@ const auth = (q, s, n) => {
   if (okPass(q.neg, q.get('x-admin'))) return n();
   limita(k, 99, 6e5); s.status(401).json({ error: 'Contraseña incorrecta' });
 };
-api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin }); });
+api.get('/info', (q, s) => { const n = q.neg; s.json({ nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, cierra: n.cierra || '' }); });
 api.get('/estilos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,tipo,descripcion,precio FROM estilos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
   const { fecha, barbero } = q.query, n = q.neg;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return s.json([]);
-  if (cerrado(n, fecha)) return s.json(todas(n));
-  const r = await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [n.id, fecha, barbero]);
-  const b = await pool.query('SELECT hora FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3', [n.id, fecha, barbero]);
-  s.json(b.rows.some(x => x.hora === null) ? todas(n) : [...r.rows, ...b.rows].map(x => x.hora));
+  const lista = barbero === 'cualquiera' ? bars(n) : [String(barbero)], sets = await Promise.all(lista.map(b => ocupadas(n, fecha, b)));
+  s.json(todas(n).filter(h => sets.every(x => x.has(h))));
 }));
 api.post('/citas', wrap(async (q, s) => {
   if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
   if (!vigente(q.neg)) return s.status(403).json({ error: 'Esta barbería no está recibiendo citas por ahora.' });
-  const n = q.neg, { cliente, telefono, barbero, servicio, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
+  const n = q.neg, { cliente, telefono, servicio, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
+  let barbero = q.body.barbero;
+  if (barbero === 'cualquiera' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) barbero = await elige(n, fecha, String(hora)) || bars(n)[0];
   if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || h < n.hora_ini || h > n.hora_fin)
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
-  if (fecha < HOY()) return s.status(400).json({ error: 'Elige una fecha de hoy en adelante' });
+  if (fecha < HOY() || (fecha === HOY() && h <= ahoraH())) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
   const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2', [servicio, n.id]);
   if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
   if (cerrado(n, fecha) || (await pool.query('SELECT 1 FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND (hora IS NULL OR hora=$4)', [n.id, fecha, barbero, hora])).rowCount)
     return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
   try {
-    const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio',
+    const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio,barbero',
       [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, crypto.randomBytes(6).toString('hex'), n.id]);
     avisa(n, { evento: 'nueva_cita', cliente: String(cliente).slice(0, 80), telefono: String(telefono).slice(0, 20), barbero, servicio, fecha, hora, precio: Number(r.rows[0].precio) });
     s.json(r.rows[0]);
@@ -184,8 +192,30 @@ api.post('/cancelar', wrap(async (q, s) => {
   avisa(q.neg, { evento: 'cita_cancelada', ...r.rows[0], precio: Number(r.rows[0].precio) });
   s.json({ ok: true });
 }));
+api.post('/reprogramar', wrap(async (q, s) => {
+  if (limita('m' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
+  const n = q.neg, { codigo, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
+  if (!vigente(n)) return s.status(403).json({ error: 'Esta barbería no está recibiendo citas por ahora.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) || !/^\d{2}:\d{2}$/.test(String(hora)) || h < n.hora_ini || h > n.hora_fin) return s.status(400).json({ error: 'Revisa la nueva fecha y hora' });
+  if (fecha < HOY() || (fecha === HOY() && h <= ahoraH())) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
+  const c = (await pool.query("SELECT id,cliente,telefono,servicio,barbero,fecha::text AS fecha,hora,precio FROM citas WHERE negocio_id=$1 AND codigo=$2 AND estado='pendiente' AND fecha>=$3", [n.id, String(codigo), HOY()])).rows[0];
+  if (!c) return s.status(404).json({ error: 'No encontramos esa cita' });
+  if ((await ocupadas(n, fecha, c.barbero)).has(hora)) return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
+  try { await pool.query('UPDATE citas SET fecha=$1,hora=$2 WHERE id=$3', [fecha, hora, c.id]); }
+  catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese horario ya se ocupó. Elige otro.' }); throw x; }
+  avisa(n, { evento: 'cita_reprogramada', ...c, fecha, hora, precio: Number(c.precio), antes: new Date(c.fecha + 'T12:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) + ' ' + c.hora });
+  s.json({ ok: true });
+}));
 api.get('/admin/citas', auth, wrap(async (q, s) => s.json((await pool.query('SELECT * FROM citas WHERE negocio_id=$1 AND fecha=$2 ORDER BY hora', [q.neg.id, q.query.fecha])).rows)));
-api.patch('/admin/citas/:id', auth, wrap(async (q, s) => s.json((await pool.query('UPDATE citas SET estado=$1 WHERE id=$2 AND negocio_id=$3 RETURNING *', [q.body.estado, q.params.id, q.neg.id])).rows[0] || {})));
+api.patch('/admin/citas/:id', auth, wrap(async (q, s) => ['pendiente', 'completada', 'cancelada', 'no_llego'].includes(q.body.estado) ? s.json((await pool.query('UPDATE citas SET estado=$1 WHERE id=$2 AND negocio_id=$3 RETURNING *', [q.body.estado, q.params.id, q.neg.id])).rows[0] || {}) : s.status(400).json({ error: 'Estado no válido' })));
+api.get('/admin/export', auth, wrap(async (q, s) => {
+  const ok = x => /^\d{4}-\d{2}-\d{2}$/.test(String(x)), hasta = ok(q.query.hasta) ? q.query.hasta : HOY(), desde = ok(q.query.desde) ? q.query.desde : hasta.slice(0, 8) + '01';
+  const r = (await pool.query('SELECT fecha::text AS fecha,hora,cliente,telefono,servicio,barbero,precio,estado FROM citas WHERE negocio_id=$1 AND fecha BETWEEN $2 AND $3 ORDER BY fecha,hora', [q.neg.id, desde, hasta])).rows;
+  const cel = v => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+  const E = { pendiente: 'Pendiente', completada: 'Completada', cancelada: 'Cancelada', no_llego: 'No llegó' };
+  s.type('text/csv; charset=utf-8').set('Content-Disposition', `attachment; filename="citas-${desde}-a-${hasta}.csv"`)
+    .send('\ufeff' + [['Fecha', 'Hora', 'Cliente', 'WhatsApp', 'Servicio', 'Barbero', 'Precio', 'Estado'], ...r.map(x => [x.fecha, x.hora, x.cliente, x.telefono, x.servicio, x.barbero, Number(x.precio), E[x.estado] || x.estado])].map(f => f.map(cel).join(',')).join('\r\n'));
+}));
 api.get('/admin/corte', auth, wrap(async (q, s) => s.json((await pool.query(
   "SELECT barbero, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float total FROM citas WHERE negocio_id=$1 AND fecha=$2 AND estado='completada' GROUP BY barbero", [q.neg.id, q.query.fecha])).rows)));
 api.get('/admin/catalogo', auth, wrap(async (q, s) => s.json({
