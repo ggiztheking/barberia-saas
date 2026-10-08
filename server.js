@@ -2,9 +2,10 @@ const express = require('express'), { Pool } = require('pg'), crypto = require('
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
-app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' }); n(); });
+app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN', 'Strict-Transport-Security': 'max-age=15552000', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' }); n(); });
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
+const fs = require('fs');
 app.get('/health', (q, s) => s.send('ok'));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const HOY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Merida' });
@@ -270,7 +271,23 @@ app.get('/registro', page('registro.html'));
 app.get('/super', page('app-super.html'));
 app.get('/agenda.html', (q, s) => s.redirect(301, '/onyx/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/onyx/admin'));
-app.get('/:slug', existe, page('negocio.html'));
+app.get('/sitemap.xml', wrap(async (q, s) => {
+  const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
+  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', ...r.map(x => '/' + encodeURIComponent(x.slug))].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
+}));
+const NEG = fs.readFileSync(__dirname + '/public/negocio.html', 'utf8');
+const he = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// La landing sale con título, descripción y vista previa (WhatsApp, Google) ya puestos por el servidor.
+app.get('/:slug', existe, wrap(async (q, s) => {
+  const n = (await pool.query('SELECT nombre,direccion,fotos FROM negocios WHERE slug=$1', [q.params.slug])).rows[0];
+  const t = he(/barber/i.test(n.nombre) ? n.nombre : n.nombre + ' · Barbería'), base = `${q.protocol}://${q.get('host')}`, url = `${base}/${encodeURIComponent(q.params.slug)}`;
+  const d = he(`Agenda tu cita en línea en ${n.nombre}${n.direccion ? ', ' + n.direccion : ''}. Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.`);
+  const meta = `<meta property="og:url" content="${url}"><link rel="canonical" href="${url}">${n.fotos ? `<meta property="og:image" content="${base}/img/hero.jpg"><meta name="twitter:card" content="summary_large_image">` : ''}`;
+  s.type('html').send(NEG.replace('<title>Barbería</title>', `<title>${t}</title>`)
+    .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${d}">`)
+    .replace('<meta property="og:title" content="Barbería">', `<meta property="og:title" content="${t}">`)
+    .replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${d}">${meta}`));
+}));
 app.get('/:slug/agenda', existe, page('app-agenda.html'));
 app.get('/:slug/admin', existe, page('app-admin.html'));
 app.get('/:slug/cartel', existe, page('cartel.html'));
