@@ -89,9 +89,17 @@ const SEED = [
  ['Corte y barba','servicio','Corte a elegir más perfilado de barba con navaja.',350],['Barba con navaja','servicio','Toalla caliente, navaja y aceite.',130]];
 const PROD = [['Pomada mate','Fijación fuerte sin brillo.',180],['Cera con brillo','Acabado clásico y peinado pulido.',180],
  ['Aceite para barba','Suaviza e hidrata.',160],['Shampoo para barba','Limpieza diaria.',140],['Spray texturizante','Volumen y textura.',170]];
+const PREG = [
+ ['¿Necesito crear una cuenta para agendar?', 'No. Basta con tu nombre y tu WhatsApp. Si creas una cuenta, ves tus citas e historial desde cualquier celular.'],
+ ['¿Cómo cambio o cancelo mi cita?', 'En la agenda, entra a "Mi cuenta": ahí puedes cambiar el horario o cancelar en un toque.'],
+ ['¿Puedo elegir a mi barbero?', 'Sí. Eliges a tu barbero al agendar y solo ves sus horarios libres. También puedes elegir "Cualquiera" y te asignamos al primero disponible.'],
+ ['¿Qué pasa si llego tarde?', 'Te esperamos unos minutos. Si vas a llegar tarde, escríbenos por WhatsApp para ver si alcanzamos a atenderte o movemos tu cita.'],
+ ['¿Cómo puedo pagar?', 'Pagas en la barbería al terminar tu servicio.']];
+const seedPreg = async id => { for (const [k, [p, r]] of PREG.entries()) await pool.query('INSERT INTO preguntas(negocio_id,pregunta,respuesta,orden) VALUES($1,$2,$3,$4)', [id, p, r, k]); };
 const seed = async id => {
   for (const r of SEED) await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4,$5)', [...r, id]);
   for (const r of PROD) await pool.query('INSERT INTO productos(nombre,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4)', [...r, id]);
+  await seedPreg(id);
 };
 (async () => {
   await pool.query(`CREATE TABLE IF NOT EXISTS negocios (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, nombre TEXT NOT NULL, whatsapp TEXT, direccion TEXT, maps TEXT,
@@ -117,6 +125,12 @@ const seed = async id => {
   await pool.query('ALTER TABLE citas ADD COLUMN IF NOT EXISTS cuenta_id INT');
   await pool.query('CREATE TABLE IF NOT EXISTS imagenes (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, tipo TEXT NOT NULL, ref TEXT NOT NULL, mime TEXT NOT NULL, data BYTEA NOT NULL, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS imagenes_ref ON imagenes(negocio_id, tipo, ref)');
+  for (const c of ['lema', 'acerca', 'estacionamiento', 'zonas', 'instagram']) await pool.query(`ALTER TABLE negocios ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+  await pool.query('CREATE TABLE IF NOT EXISTS perfiles (negocio_id INT NOT NULL, barbero TEXT NOT NULL, especialidad TEXT, bio TEXT, instagram TEXT, PRIMARY KEY (negocio_id, barbero))');
+  await pool.query('CREATE TABLE IF NOT EXISTS eventos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, titulo TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, descripcion TEXT, cupo INT, creado TIMESTAMPTZ DEFAULT now())');
+  await pool.query('CREATE TABLE IF NOT EXISTS asistentes (evento_id INT NOT NULL, nombre TEXT NOT NULL, telefono TEXT NOT NULL, creado TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (evento_id, telefono))');
+  await pool.query('CREATE TABLE IF NOT EXISTS preguntas (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, pregunta TEXT NOT NULL, respuesta TEXT NOT NULL, orden INT DEFAULT 0)');
+  for (const r of (await pool.query('SELECT id FROM negocios n WHERE NOT EXISTS (SELECT 1 FROM preguntas p WHERE p.negocio_id=n.id)')).rows) await seedPreg(r.id);
   await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
   if (!o) {
@@ -210,7 +224,7 @@ api.use((q, s, n) => {
   n();
 });
 // El barbero solo ve y toca lo suyo; el resto del panel es del dueño.
-const BARB_OK = /^\/admin\/(citas|cita|corte|bloqueos|bloqueo|me|salir|mi-clave)(\/|$)/;
+const BARB_OK = /^\/admin\/(citas|cita|corte|bloqueos|bloqueo|me|salir|mi-clave|perfil)(\/|$)/;
 const mio = q => (q.user && q.user.rol === 'barbero' ? q.user.barbero : null);
 const auth = async (q, s, n) => {
   try {
@@ -282,6 +296,47 @@ api.post('/admin/equipo/:id', auth, wrap(async (q, s) => {
   s.json({ ok: true });
 }));
 
+// ---- Contenido de la página
+api.post('/admin/perfil', auth, wrap(async (q, s) => {
+  const b = mio(q) || String(q.body.barbero || '');
+  if (!bars(q.neg).includes(b)) return s.status(400).json({ error: 'Ese barbero no está en tu lista' });
+  const t = (k, l) => String(q.body[k] || '').trim().slice(0, l), ig = t('instagram', 40).replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '');
+  await pool.query('INSERT INTO perfiles(negocio_id,barbero,especialidad,bio,instagram) VALUES($1,$2,$3,$4,$5) ON CONFLICT (negocio_id,barbero) DO UPDATE SET especialidad=$3,bio=$4,instagram=$5', [q.neg.id, b, t('especialidad', 80), t('bio', 400), ig]);
+  s.json({ ok: true });
+}));
+api.get('/admin/perfil', auth, wrap(async (q, s) => s.json((await pool.query('SELECT barbero,especialidad,bio,instagram FROM perfiles WHERE negocio_id=$1 AND ($2::text IS NULL OR barbero=$2)', [q.neg.id, mio(q)])).rows)));
+api.get('/admin/eventos', auth, wrap(async (q, s) => {
+  const ev = (await pool.query("SELECT e.id,e.titulo,e.fecha::text AS fecha,e.hora,e.descripcion,e.cupo,i.id AS img FROM eventos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='evento' AND i.ref=e.id::text WHERE e.negocio_id=$1 AND e.fecha>=($2::date - 30) ORDER BY e.fecha DESC", [q.neg.id, HOY()])).rows;
+  const as = ev.length ? (await pool.query('SELECT evento_id,nombre,telefono FROM asistentes WHERE evento_id=ANY($1) ORDER BY creado', [ev.map(e => e.id)])).rows : [];
+  s.json(ev.map(e => ({ ...e, asistentes: as.filter(a => a.evento_id === e.id).map(({ nombre, telefono }) => ({ nombre, telefono })) })));
+}));
+api.post('/admin/evento', auth, wrap(async (q, s) => {
+  const t = (k, l) => String(q.body[k] || '').trim().slice(0, l), titulo = t('titulo', 100), fecha = t('fecha', 10), hora = t('hora', 5), cupo = parseInt(q.body.cupo) || null;
+  if (!titulo || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || (hora && !/^\d{2}:\d{2}$/.test(hora))) return s.status(400).json({ error: 'Escribe el título y la fecha del evento' });
+  if (cupo !== null && (cupo < 1 || cupo > 5000)) return s.status(400).json({ error: 'El cupo debe ser un número entre 1 y 5000' });
+  if (q.body.id) {
+    const r = await pool.query('UPDATE eventos SET titulo=$1,fecha=$2,hora=$3,descripcion=$4,cupo=$5 WHERE id=$6 AND negocio_id=$7 RETURNING id', [titulo, fecha, hora || null, t('descripcion', 800), cupo, q.body.id, q.neg.id]);
+    return r.rowCount ? s.json({ id: r.rows[0].id }) : s.status(404).json({ error: 'No encontramos ese evento' });
+  }
+  if ((await pool.query('SELECT COUNT(*)::int c FROM eventos WHERE negocio_id=$1 AND fecha>=$2', [q.neg.id, HOY()])).rows[0].c >= 20) return s.status(400).json({ error: 'Llegaste al límite de 20 eventos próximos' });
+  s.json({ id: (await pool.query('INSERT INTO eventos(negocio_id,titulo,fecha,hora,descripcion,cupo) VALUES($1,$2,$3,$4,$5,$6) RETURNING id', [q.neg.id, titulo, fecha, hora || null, t('descripcion', 800), cupo])).rows[0].id });
+}));
+api.post('/admin/evento/borrar', auth, wrap(async (q, s) => {
+  const r = await pool.query('DELETE FROM eventos WHERE id=$1 AND negocio_id=$2 RETURNING id', [q.body.id, q.neg.id]);
+  if (r.rowCount) { await pool.query('DELETE FROM asistentes WHERE evento_id=$1', [q.body.id]); await pool.query("DELETE FROM imagenes WHERE negocio_id=$1 AND tipo='evento' AND ref=$2", [q.neg.id, String(q.body.id)]); }
+  s.json({ ok: true });
+}));
+api.get('/admin/preguntas', auth, wrap(async (q, s) => s.json((await pool.query('SELECT id,pregunta,respuesta FROM preguntas WHERE negocio_id=$1 ORDER BY orden,id', [q.neg.id])).rows)));
+api.post('/admin/pregunta', auth, wrap(async (q, s) => {
+  const p = String(q.body.pregunta || '').trim().slice(0, 200), r = String(q.body.respuesta || '').trim().slice(0, 1000);
+  if (!p || !r) return s.status(400).json({ error: 'Escribe la pregunta y la respuesta' });
+  if (q.body.id) { await pool.query('UPDATE preguntas SET pregunta=$1,respuesta=$2 WHERE id=$3 AND negocio_id=$4', [p, r, q.body.id, q.neg.id]); return s.json({ ok: true }); }
+  if ((await pool.query('SELECT COUNT(*)::int c FROM preguntas WHERE negocio_id=$1', [q.neg.id])).rows[0].c >= 30) return s.status(400).json({ error: 'Llegaste al límite de 30 preguntas' });
+  await pool.query('INSERT INTO preguntas(negocio_id,pregunta,respuesta,orden) VALUES($1,$2,$3,(SELECT COALESCE(MAX(orden),0)+1 FROM preguntas WHERE negocio_id=$1))', [q.neg.id, p, r]);
+  s.json({ ok: true });
+}));
+api.post('/admin/pregunta/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM preguntas WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
+
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
 api.post('/cliente/registro', wrap(async (q, s) => {
@@ -340,10 +395,11 @@ api.get('/admin/cuentas', auth, wrap(async (q, s) => s.json((await pool.query('S
 // ---- Fotos (guardadas en la propia base de datos)
 api.post('/admin/imagen', auth, wrap(async (q, s) => {
   const { tipo, data } = q.body, n = q.neg; let ref = String(q.body.ref || '');
-  if (!['portada', 'barbero', 'servicio'].includes(tipo)) return s.status(400).json({ error: 'Tipo de foto no válido' });
+  if (!['portada', 'barbero', 'servicio', 'producto', 'evento'].includes(tipo)) return s.status(400).json({ error: 'Tipo de foto no válido' });
   if (tipo === 'portada') ref = '1';
   if (tipo === 'barbero' && !bars(n).includes(ref)) return s.status(400).json({ error: 'Ese barbero no está en tu lista' });
-  if (tipo === 'servicio' && !(await pool.query('SELECT 1 FROM estilos WHERE id=$1 AND negocio_id=$2', [ref, n.id])).rowCount) return s.status(400).json({ error: 'Ese servicio no existe' });
+  const TB = { servicio: 'estilos', producto: 'productos', evento: 'eventos' }[tipo];
+  if (TB && (!/^\d{1,10}$/.test(ref) || !(await pool.query(`SELECT 1 FROM ${TB} WHERE id=$1 AND negocio_id=$2`, [ref, n.id])).rowCount)) return s.status(400).json({ error: 'Ese elemento no existe' });
   const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(data || ''));
   if (!m) return s.status(400).json({ error: 'La foto debe ser JPG, PNG o WebP' });
   const buf = Buffer.from(m[2], 'base64'), firma = buf.subarray(0, 12).toString('hex');
@@ -358,6 +414,29 @@ api.post('/admin/imagen/borrar', auth, wrap(async (q, s) => {
   s.json({ ok: true });
 }));
 api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, cierra: n.cierra || '' }); }));
+api.get('/pagina', wrap(async (q, s) => {
+  const n = q.neg, id = n.id, Q = (sql, p = [id]) => pool.query(sql, p).then(r => r.rows);
+  const [pf, ev, pr, pd] = await Promise.all([
+    Q("SELECT p.barbero,p.especialidad,p.bio,p.instagram FROM perfiles p WHERE p.negocio_id=$1"),
+    Q("SELECT e.id,e.titulo,e.fecha::text AS fecha,e.hora,e.descripcion,e.cupo,i.id AS img,(SELECT COUNT(*)::int FROM asistentes a WHERE a.evento_id=e.id) AS van FROM eventos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='evento' AND i.ref=e.id::text WHERE e.negocio_id=$1 AND e.fecha>=$2 ORDER BY e.fecha,e.hora LIMIT 12", [id, HOY()]),
+    Q('SELECT pregunta,respuesta FROM preguntas WHERE negocio_id=$1 ORDER BY orden,id'),
+    Q("SELECT p.id,p.nombre,p.descripcion,p.precio,i.id AS img FROM productos p LEFT JOIN imagenes i ON i.negocio_id=p.negocio_id AND i.tipo='producto' AND i.ref=p.id::text WHERE p.negocio_id=$1 ORDER BY p.id")]);
+  const P = Object.fromEntries(pf.map(x => [x.barbero, x]));
+  s.json({ lema: n.lema || '', acerca: n.acerca || '', estacionamiento: n.estacionamiento || '', zonas: n.zonas || '', instagram: n.instagram || '',
+    perfiles: bars(n).map(b => ({ barbero: b, especialidad: (P[b] || {}).especialidad || '', bio: (P[b] || {}).bio || '', instagram: (P[b] || {}).instagram || '' })),
+    eventos: ev, preguntas: pr, productos: pd });
+}));
+api.post('/eventos/:id/asistir', wrap(async (q, s) => {
+  if (limita('ev' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
+  const e = (await pool.query('SELECT id,cupo,(SELECT COUNT(*)::int FROM asistentes a WHERE a.evento_id=e.id) AS van FROM eventos e WHERE id=$1 AND negocio_id=$2 AND fecha>=$3', [q.params.id, q.neg.id, HOY()])).rows[0];
+  if (!e) return s.status(404).json({ error: 'Ese evento ya no está disponible' });
+  const nombre = String(q.body.nombre || '').trim().slice(0, 80), tel = tel10(q.body.telefono);
+  if (!nombre || tel.length !== 10) return s.status(400).json({ error: 'Escribe tu nombre y tu WhatsApp de 10 dígitos' });
+  if (e.cupo && e.van >= e.cupo) return s.status(409).json({ error: 'Ya se llenó el cupo de este evento' });
+  try { await pool.query('INSERT INTO asistentes(evento_id,nombre,telefono) VALUES($1,$2,$3)', [e.id, nombre, tel]); }
+  catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ya estás apuntado a este evento' }); throw x; }
+  s.json({ ok: true, van: e.van + 1 });
+}));
 api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
@@ -426,7 +505,7 @@ api.get('/admin/corte', auth, wrap(async (q, s) => s.json((await pool.query(
   "SELECT barbero, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float total FROM citas WHERE negocio_id=$1 AND fecha=$2 AND estado='completada' AND ($3::text IS NULL OR barbero=$3) GROUP BY barbero", [q.neg.id, q.query.fecha, mio(q)])).rows)));
 api.get('/admin/catalogo', auth, wrap(async (q, s) => s.json({
   estilos: (await pool.query("SELECT e.id,e.nombre,e.precio,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows,
-  productos: (await pool.query('SELECT id,nombre,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows })));
+  productos: (await pool.query("SELECT p.id,p.nombre,p.precio,i.id AS img FROM productos p LEFT JOIN imagenes i ON i.negocio_id=p.negocio_id AND i.tipo='producto' AND i.ref=p.id::text WHERE p.negocio_id=$1 ORDER BY p.id", [q.neg.id])).rows })));
 api.patch('/admin/precio', auth, wrap(async (q, s) => {
   const { tabla, id, precio } = q.body;
   if (!['estilos', 'productos'].includes(tabla) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Dato no válido' });
@@ -471,14 +550,14 @@ api.get('/admin/clientes', auth, wrap(async (q, s) => s.json((await pool.query(
    COUNT(*) FILTER (WHERE estado='completada')::int AS visitas, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float AS gastado,
    (MAX(fecha) FILTER (WHERE estado='completada'))::text AS ultima, (MIN(fecha) FILTER (WHERE estado='pendiente' AND fecha>=$2))::text AS proxima
    FROM citas WHERE negocio_id=$1 AND regexp_replace(telefono,'\\D','','g')<>'' GROUP BY 1 ORDER BY MAX(fecha) DESC LIMIT 300`, [q.neg.id, HOY()])).rows)));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, plan, vence, abierto: vigente(q.neg) }); });
+api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram, plan, vence, abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
   const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null, correo = v('correo').toLowerCase().slice(0, 120);
   if (lista.length > lim) return s.status(400).json({ error: `Tu plan permite hasta ${lim} barberos` });
   if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps)) || !/^([0-6](,[0-6])*)?$/.test(cierra) || (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) return s.status(400).json({ error: 'Revisa los datos' });
-  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9,correo=$10 WHERE id=$11',
-    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, correo || null, n.id]);
+  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9,correo=$10,lema=$11,acerca=$12,estacionamiento=$13,zonas=$14,instagram=$15 WHERE id=$16',
+    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, correo || null, v('lema').slice(0, 120), v('acerca').slice(0, 1200), v('estacionamiento').slice(0, 200), v('zonas').slice(0, 300), v('instagram').replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40), n.id]);
   s.json({ ok: true });
 }));
 
@@ -494,7 +573,7 @@ api.post('/admin/item', auth, wrap(async (q, s) => {
 api.post('/admin/borrar', auth, wrap(async (q, s) => {
   if (!['estilos', 'productos'].includes(q.body.tabla)) return s.status(400).json({ error: 'Dato no válido' });
   await pool.query(`DELETE FROM ${q.body.tabla} WHERE id=$1 AND negocio_id=$2`, [q.body.id, q.neg.id]);
-  if (q.body.tabla === 'estilos') await pool.query("DELETE FROM imagenes WHERE negocio_id=$1 AND tipo='servicio' AND ref=$2", [q.neg.id, String(q.body.id)]);
+  await pool.query('DELETE FROM imagenes WHERE negocio_id=$1 AND tipo=$2 AND ref=$3', [q.neg.id, q.body.tabla === 'estilos' ? 'servicio' : 'producto', String(q.body.id)]);
   s.json({ ok: true });
 }));
 

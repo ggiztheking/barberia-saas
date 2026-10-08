@@ -1,6 +1,6 @@
 {
   "name": "barberia-saas",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "SaaS de agendas para barberías: landing, reservas en línea y panel de administración",
   "main": "server.js",
   "private": true,

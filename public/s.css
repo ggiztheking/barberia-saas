@@ -121,3 +121,5 @@ main{padding:26px 20px 70px}h2{font-size:30px}
 @media(max-width:820px){.acceso{grid-template-columns:1fr}.acceso .foto{min-height:34vh}.acceso .forma{padding:32px 22px 48px;margin:0 auto}}
 @media(max-width:640px){.opt .img{margin:-13px -13px 8px}}
 .foto-slot span{overflow-wrap:anywhere}.foto-slot .btn,.foto-slot button{flex:0 0 auto}
+@media(max-width:640px){.tabs button{letter-spacing:.06em;padding:17px 6px;font-size:10.5px}}
+textarea:focus{outline:0;border-color:var(--gold)!important}
