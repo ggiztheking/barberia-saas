@@ -68,10 +68,11 @@ const seed = async id => {
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
   if (!o) {
     const salt = crypto.randomBytes(8).toString('hex');
-    o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Onyx Barbería','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.app.goo.gl/NpfSt23Eorm4wgd37',$1,true,$2,$3) RETURNING id",
+    o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Estilo Internacional','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.app.goo.gl/NpfSt23Eorm4wgd37',$1,true,$2,$3) RETURNING id",
       [process.env.BARBEROS || 'Pedro,GGTHEBARBER', salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
   }
   await pool.query("UPDATE negocios SET plan='pro' WHERE slug='onyx' AND plan='prueba'");
+  await pool.query("UPDATE negocios SET nombre='Estilo Internacional' WHERE slug='onyx' AND nombre='Onyx Barbería'");
   await pool.query('CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT)');
   if (process.env.CORREO_ONYX) {
     const c = (await pool.query("SELECT v FROM config WHERE k='correo_onyx'")).rows[0];
