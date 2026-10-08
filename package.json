@@ -1,1 +1,14 @@
-{"name":"barberia-saas","version":"0.1.0","main":"server.js","scripts":{"start":"node server.js"},"engines":{"node":">=18"},"dependencies":{"express":"^4.19.2","pg":"^8.12.0"}}
+{
+  "name": "barberia-saas",
+  "version": "0.2.0",
+  "description": "SaaS de agendas para barberías: landing, reservas en línea y panel de administración",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.19.2", "pg": "^8.12.0" }
+}

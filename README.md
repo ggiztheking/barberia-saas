@@ -34,12 +34,20 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 | `RESEND_URL` | No | URL alterna de la API de Resend |
 | `MAKE_WEBHOOK_URL` | No | Webhook de Make para avisos de citas nuevas/canceladas |
 
+## App instalable (PWA)
+
+Cada barbería se puede instalar como app desde su página (`/<slug>`): botón "Instalar app" en Android/Chrome, o Compartir → Añadir a pantalla de inicio en iPhone. El manifest (`/<slug>/manifest.json`) usa el nombre del negocio y `public/sw.js` muestra `offline.html` sin internet; las citas nunca se guardan en caché.
+
+## SEO
+
+La landing sale con título, descripción, vista previa para WhatsApp/redes y URL canónica generados por el servidor. Hay `GET /sitemap.xml` (negocios vigentes) y `public/robots.txt`.
+
 ## Despliegue (Railway)
 
 El servicio `app` está conectado a este repo (rama `main`). Cada `git push` a `main` dispara un build y despliegue automáticos. Las variables se configuran en el dashboard de Railway; `DATABASE_URL` viene del servicio Postgres del mismo proyecto.
 
 - Health check: `GET /health` → `ok`
-- Arranque: `npm start`
+- Arranque: `npm start` · desarrollo: `npm run dev` · verificación de sintaxis: `npm run check`
 
 ## Endpoints principales
 
@@ -65,6 +73,6 @@ El servicio `app` está conectado a este repo (rama `main`). Cada `git push` a `
 
 - `POST /api/registro` — crea una barbería (limitado a 5 por hora por IP)
 - `GET /api/super/negocios`, `GET /api/super/insights`, `POST /api/super/negocio/:id` — requieren cabecera `x-super: <SUPER_PASS>`
-- `GET /health`
+- `GET /health`, `GET /sitemap.xml`
 
 Los intentos fallidos de contraseña (admin y super) se limitan a 8 cada 10 minutos por IP.
