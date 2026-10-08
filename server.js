@@ -130,6 +130,11 @@ const seed = async id => {
   await pool.query('CREATE TABLE IF NOT EXISTS eventos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, titulo TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, descripcion TEXT, cupo INT, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE TABLE IF NOT EXISTS asistentes (evento_id INT NOT NULL, nombre TEXT NOT NULL, telefono TEXT NOT NULL, creado TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (evento_id, telefono))');
   await pool.query('CREATE TABLE IF NOT EXISTS preguntas (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, pregunta TEXT NOT NULL, respuesta TEXT NOT NULL, orden INT DEFAULT 0)');
+  await pool.query('ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS comision NUMERIC DEFAULT 0');
+  await pool.query(`CREATE TABLE IF NOT EXISTS movimientos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, tipo TEXT NOT NULL, categoria TEXT NOT NULL, concepto TEXT NOT NULL, monto NUMERIC(12,2) NOT NULL,
+    fecha DATE NOT NULL, metodo TEXT, nota TEXT, barbero TEXT, fijo_id INT, usuario_id INT, creado TIMESTAMPTZ DEFAULT now())`);
+  await pool.query('CREATE INDEX IF NOT EXISTS movimientos_fecha ON movimientos(negocio_id, fecha)');
+  await pool.query('CREATE TABLE IF NOT EXISTS fijos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, concepto TEXT NOT NULL, categoria TEXT NOT NULL, monto NUMERIC(12,2) NOT NULL, dia INT DEFAULT 1)');
   for (const r of (await pool.query('SELECT id FROM negocios n WHERE NOT EXISTS (SELECT 1 FROM preguntas p WHERE p.negocio_id=n.id)')).rows) await seedPreg(r.id);
   await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
   let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
@@ -336,6 +341,76 @@ api.post('/admin/pregunta', auth, wrap(async (q, s) => {
   s.json({ ok: true });
 }));
 api.post('/admin/pregunta/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM preguntas WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
+
+// ---- Finanzas: gastos, inversión, otras ventas, gastos fijos y comisiones
+const CATS = {
+  gasto: ['Renta', 'Luz y agua', 'Internet y teléfono', 'Productos e insumos', 'Sueldos y comisiones', 'Publicidad', 'Mantenimiento', 'Impuestos', 'Otros gastos'],
+  inversion: ['Mobiliario', 'Equipo y herramientas', 'Remodelación', 'Capacitación', 'Otra inversión'],
+  ingreso: ['Venta de productos', 'Otro ingreso'] };
+const METODOS = ['Efectivo', 'Tarjeta', 'Transferencia'];
+const rangoMes = m => { const ok = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || '')), mes = ok ? m : HOY().slice(0, 7); return { mes, desde: mes + '-01' }; };
+api.get('/admin/finanzas', auth, wrap(async (q, s) => {
+  const { mes, desde } = rangoMes(q.query.mes), id = q.neg.id, Q = (sql, p) => pool.query(sql, p).then(r => r.rows);
+  const H = "($2::date + interval '1 month')";
+  const [serv, mov, porCat, fijos, tot, serie, com] = await Promise.all([
+    Q(`SELECT barbero, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float total FROM citas WHERE negocio_id=$1 AND estado='completada' AND fecha>=$2 AND fecha<${H} GROUP BY barbero`, [id, desde]),
+    Q(`SELECT id,tipo,categoria,concepto,monto::float AS monto,fecha::text AS fecha,metodo,nota,barbero,fijo_id FROM movimientos WHERE negocio_id=$1 AND fecha>=$2 AND fecha<${H} ORDER BY fecha DESC, id DESC`, [id, desde]),
+    Q(`SELECT tipo,categoria,SUM(monto)::float total FROM movimientos WHERE negocio_id=$1 AND fecha>=$2 AND fecha<${H} GROUP BY tipo,categoria ORDER BY total DESC`, [id, desde]),
+    Q('SELECT id,concepto,categoria,monto::float AS monto,dia FROM fijos WHERE negocio_id=$1 ORDER BY dia,id', [id]),
+    Q(`SELECT (SELECT COALESCE(SUM(monto),0) FROM movimientos WHERE negocio_id=$1 AND tipo='inversion')::float inversion,
+      ((SELECT COALESCE(SUM(precio),0) FROM citas WHERE negocio_id=$1 AND estado='completada') + (SELECT COALESCE(SUM(monto),0) FROM movimientos WHERE negocio_id=$1 AND tipo='ingreso')
+       - (SELECT COALESCE(SUM(monto),0) FROM movimientos WHERE negocio_id=$1 AND tipo='gasto'))::float utilidad`, [id]),
+    Q(`WITH m AS (SELECT generate_series(date_trunc('month',$2::date) - interval '5 months', date_trunc('month',$2::date), interval '1 month')::date AS mes)
+      SELECT to_char(m.mes,'YYYY-MM') mes,
+       (SELECT COALESCE(SUM(precio),0) FROM citas c WHERE c.negocio_id=$1 AND c.estado='completada' AND c.fecha>=m.mes AND c.fecha<m.mes+interval '1 month')::float
+       + (SELECT COALESCE(SUM(monto),0) FROM movimientos v WHERE v.negocio_id=$1 AND v.tipo='ingreso' AND v.fecha>=m.mes AND v.fecha<m.mes+interval '1 month')::float AS ingresos,
+       (SELECT COALESCE(SUM(monto),0) FROM movimientos v WHERE v.negocio_id=$1 AND v.tipo='gasto' AND v.fecha>=m.mes AND v.fecha<m.mes+interval '1 month')::float AS gastos
+      FROM m ORDER BY m.mes`, [id, desde]),
+    Q('SELECT barbero, comision::float FROM perfiles WHERE negocio_id=$1', [id])]);
+  const C = Object.fromEntries(com.map(x => [x.barbero, x.comision || 0])), suma = t => mov.filter(x => x.tipo === t).reduce((a, x) => a + x.monto, 0);
+  const servicios = serv.reduce((a, x) => a + x.total, 0), extras = suma('ingreso'), gastos = suma('gasto'), inversion = suma('inversion');
+  s.json({ mes, categorias: CATS, metodos: METODOS, servicios, extras, gastos, inversion, utilidad: servicios + extras - gastos,
+    barberos: bars(q.neg).map(b => { const v = serv.find(x => x.barbero === b) || { cortes: 0, total: 0 }, pct = C[b] || 0, debe = Math.round(v.total * pct) / 100;
+      return { barbero: b, cortes: v.cortes, total: v.total, comision: pct, debe, pagado: mov.filter(x => x.tipo === 'gasto' && x.barbero === b).reduce((a, x) => a + x.monto, 0) }; }),
+    porCategoria: porCat, movimientos: mov, fijos: fijos.map(f => ({ ...f, registrado: mov.some(x => x.fijo_id === f.id) })), historico: tot[0], serie });
+}));
+api.post('/admin/movimiento', auth, wrap(async (q, s) => {
+  const b = q.body, tipo = b.tipo, monto = Math.round(Number(b.monto) * 100) / 100, fecha = String(b.fecha || HOY());
+  if (!CATS[tipo]) return s.status(400).json({ error: 'Tipo no válido' });
+  if (!(monto > 0 && monto < 10000000)) return s.status(400).json({ error: 'Escribe un monto mayor a cero' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return s.status(400).json({ error: 'Fecha no válida' });
+  const categoria = CATS[tipo].includes(b.categoria) ? b.categoria : CATS[tipo].at(-1), barbero = b.barbero && bars(q.neg).includes(b.barbero) ? b.barbero : null;
+  const fijo = b.fijo_id ? (await pool.query('SELECT id FROM fijos WHERE id=$1 AND negocio_id=$2', [b.fijo_id, q.neg.id])).rows[0] : null;
+  const r = await pool.query('INSERT INTO movimientos(negocio_id,tipo,categoria,concepto,monto,fecha,metodo,nota,barbero,fijo_id,usuario_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+    [q.neg.id, tipo, categoria, String(b.concepto || categoria).trim().slice(0, 120), monto, fecha, METODOS.includes(b.metodo) ? b.metodo : 'Efectivo', String(b.nota || '').slice(0, 300), barbero, fijo ? fijo.id : null, q.user.id]);
+  s.json({ id: r.rows[0].id });
+}));
+api.post('/admin/movimiento/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM movimientos WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
+api.post('/admin/fijo', auth, wrap(async (q, s) => {
+  const b = q.body, concepto = String(b.concepto || '').trim().slice(0, 120), monto = Math.round(Number(b.monto) * 100) / 100, dia = parseInt(b.dia) || 1;
+  if (!concepto || !(monto > 0) || dia < 1 || dia > 31) return s.status(400).json({ error: 'Escribe el concepto, el monto y el día del mes (1 a 31)' });
+  const cat = CATS.gasto.includes(b.categoria) ? b.categoria : 'Otros gastos';
+  if (b.id) await pool.query('UPDATE fijos SET concepto=$1,categoria=$2,monto=$3,dia=$4 WHERE id=$5 AND negocio_id=$6', [concepto, cat, monto, dia, b.id, q.neg.id]);
+  else {
+    if ((await pool.query('SELECT COUNT(*)::int c FROM fijos WHERE negocio_id=$1', [q.neg.id])).rows[0].c >= 30) return s.status(400).json({ error: 'Llegaste al límite de 30 gastos fijos' });
+    await pool.query('INSERT INTO fijos(negocio_id,concepto,categoria,monto,dia) VALUES($1,$2,$3,$4,$5)', [q.neg.id, concepto, cat, monto, dia]);
+  }
+  s.json({ ok: true });
+}));
+api.post('/admin/fijo/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM fijos WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
+api.post('/admin/comision', auth, wrap(async (q, s) => {
+  const b = String(q.body.barbero || ''), c = Number(q.body.comision);
+  if (!bars(q.neg).includes(b) || !(c >= 0 && c <= 100)) return s.status(400).json({ error: 'La comisión debe ser un porcentaje de 0 a 100' });
+  await pool.query('INSERT INTO perfiles(negocio_id,barbero,comision) VALUES($1,$2,$3) ON CONFLICT (negocio_id,barbero) DO UPDATE SET comision=$3', [q.neg.id, b, c]);
+  s.json({ ok: true });
+}));
+api.get('/admin/finanzas/export', auth, wrap(async (q, s) => {
+  const { mes, desde } = rangoMes(q.query.mes);
+  const r = (await pool.query("SELECT fecha::text AS fecha,tipo,categoria,concepto,monto,metodo,barbero,nota FROM movimientos WHERE negocio_id=$1 AND fecha>=$2 AND fecha<($2::date + interval '1 month') ORDER BY fecha,id", [q.neg.id, desde])).rows;
+  const cel = v => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; }, T = { gasto: 'Gasto', inversion: 'Inversión', ingreso: 'Ingreso' };
+  s.type('text/csv; charset=utf-8').set('Content-Disposition', `attachment; filename="finanzas-${mes}.csv"`)
+    .send('﻿' + [['Fecha', 'Tipo', 'Categoría', 'Concepto', 'Monto', 'Método', 'Barbero', 'Nota'], ...r.map(x => [x.fecha, T[x.tipo], x.categoria, x.concepto, Number(x.monto), x.metodo, x.barbero || '', x.nota || ''])].map(f => f.map(cel).join(',')).join('\r\n'));
+}));
 
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
@@ -607,6 +682,11 @@ app.get('/:slug', existe, wrap(async (q, s) => {
 app.get('/:slug/agenda', existe, page('app-agenda.html'));
 app.get('/:slug/admin', existe, page('app-admin.html'));
 app.get('/:slug/entrar', existe, page('entrar.html'));
+app.get('/:slug/panel.json', existe, wrap(async (q, s) => {
+  const n = (await pool.query('SELECT nombre FROM negocios WHERE slug=$1', [q.params.slug])).rows[0].nombre;
+  s.type('application/manifest+json').json({ id: `/${q.params.slug}/admin`, name: 'Panel · ' + n, short_name: 'Panel', start_url: `/${q.params.slug}/admin`, scope: `/${q.params.slug}/`, display: 'standalone', orientation: 'portrait',
+    background_color: '#07090f', theme_color: '#07090f', lang: 'es', icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }] });
+}));
 app.get('/:slug/cartel', existe, page('cartel.html'));
 app.get('/:slug/manifest.json', existe, wrap(async (q, s) => {
   const n = (await pool.query('SELECT nombre FROM negocios WHERE slug=$1', [q.params.slug])).rows[0].nombre;
