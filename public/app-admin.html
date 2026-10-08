@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=14"></head><body>
-<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
+<title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=15"></head><body>
+<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
 <div id="plan"></div>
 <section data-tab="hoy"><div class="acc" style="margin-bottom:6px"><button class="alt" onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button class="alt" onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
 <h2 id="tit" style="margin-top:22px">Agenda del día</h2><div id="lista"></div>
@@ -41,7 +41,7 @@
 </main>
 <script>
 const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-$('#lp').href='/'+N;$('#la').href='/'+N+'/agenda';
+$('#lp').href='/'+N;$('#la').href='/'+N+'/agenda';$('#lc').href='/'+N+'/crm';
 const J=async(u,b,mt)=>{const r=await fetch('/api/'+N+u,{method:mt||(b?'PATCH':'GET'),headers:{'Content-Type':'application/json'},body:b&&JSON.stringify(b)});
 if(r.status===401){location.replace('/'+N+'/entrar');throw new Error('Inicia sesión')}
 const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Algo salió mal');return d};

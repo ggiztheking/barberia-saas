@@ -412,6 +412,7 @@ api.get('/admin/finanzas/export', auth, wrap(async (q, s) => {
     .send('﻿' + [['Fecha', 'Tipo', 'Categoría', 'Concepto', 'Monto', 'Método', 'Barbero', 'Nota'], ...r.map(x => [x.fecha, T[x.tipo], x.categoria, x.concepto, Number(x.monto), x.metodo, x.barbero || '', x.nota || ''])].map(f => f.map(cel).join(',')).join('\r\n'));
 }));
 
+require('./crm')(app, api, { pool, auth, wrap, HOY, bars, tel10, limita });
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
 api.post('/cliente/registro', wrap(async (q, s) => {

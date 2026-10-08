@@ -26,10 +26,10 @@ document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{const i=docume
 $('#olv').onclick=()=>$('#ayuda').hidden=!$('#ayuda').hidden;
 const err=m=>$('#err').innerHTML=m?`<div class="msg" style="border-color:#5e3333;margin-top:16px">${esc(m)}</div>`:'';
 const envia=(f,fn)=>f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('[type=submit]'),t=b.textContent;b.disabled=true;b.textContent='Un momento…';err('');
-try{await fn();location.replace('/'+N+'/admin')}catch(x){err(x.message)}finally{b.disabled=false;b.textContent=t}};
+try{await fn();location.replace('/'+N+(new URLSearchParams(location.search).get('volver')==='crm'?'/crm':'/admin'))}catch(x){err(x.message)}finally{b.disabled=false;b.textContent=t}};
 envia($('#f-entrar'),()=>P('/cuenta/entrar',{email:$('#e-mail').value,password:$('#e-pw').value}));
 envia($('#f-config'),()=>P('/cuenta/configurar',{clave:$('#c-clave').value,nombre:$('#c-nom').value,email:$('#c-mail').value,password:$('#c-pw').value}));
-(async()=>{try{const me=await fetch('/api/'+N+'/admin/me');if(me.ok)return location.replace('/'+N+'/admin')}catch(e){}
+(async()=>{try{const me=await fetch('/api/'+N+'/admin/me');if(me.ok)return location.replace('/'+N+(new URLSearchParams(location.search).get('volver')==='crm'?'/crm':'/admin'))}catch(e){}
 try{const [i,e]=await Promise.all([fetch('/api/'+N+'/info').then(r=>r.json()),fetch('/api/'+N+'/cuenta/estado').then(r=>r.json())]);
 document.title='Entrar · '+i.nombre;$('#nom').textContent=i.nombre;const img=i.portada?'/i/'+i.portada:i.fotos?'/img/hero.jpg':'';if(img)$('#foto').style.backgroundImage=`url(${img})`;
 (e.configurado?$('#f-entrar'):$('#f-config')).hidden=false;(e.configurado?$('#e-mail'):$('#c-clave')).focus()}catch(x){err('No se pudo cargar. Revisa tu conexión.')}})();
