@@ -513,13 +513,29 @@ api.post('/eventos/:id/asistir', wrap(async (q, s) => {
   catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ya estás apuntado a este evento' }); throw x; }
   s.json({ ok: true, van: e.van + 1 });
 }));
-api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows)));
+api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img,COALESCE(c.n,0)::int AS pop FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text LEFT JOIN (SELECT servicio,COUNT(*) n FROM citas WHERE negocio_id=$1 AND fecha > CURRENT_DATE - 90 AND estado<>'cancelada' GROUP BY servicio) c ON c.servicio=e.nombre WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
   const { fecha, barbero } = q.query, n = q.neg;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return s.json([]);
   const lista = barbero === 'cualquiera' ? bars(n) : [String(barbero)], sets = await Promise.all(lista.map(b => ocupadas(n, fecha, b)));
   s.json(todas(n).filter(h => sets.every(x => x.has(h))));
+}));
+// Los primeros lugares libres de los próximos días (para "lo antes posible").
+api.get('/proximo', wrap(async (q, s) => {
+  const n = q.neg, pide = String(q.query.barbero || ''), lista = bars(n).includes(pide) ? [pide] : bars(n), hoy = HOY(), ya = ahoraH(), r = [];
+  if (!vigente(n)) return s.json([]);
+  for (let k = 0; k < 10 && r.length < 3; k++) {
+    const d = new Date(hoy + 'T12:00'); d.setDate(d.getDate() + k); const f = d.toLocaleDateString('en-CA');
+    if (cerrado(n, f)) continue;
+    const occ = await Promise.all(lista.map(b => ocupadas(n, f, b)));
+    for (const h of todas(n)) {
+      if (f === hoy && +h.slice(0, 2) <= ya) continue;
+      const i = occ.findIndex(o => !o.has(h));
+      if (i >= 0) { r.push({ fecha: f, hora: h, barbero: lista[i] }); if (r.length >= 3) break; }
+    }
+  }
+  s.json(r);
 }));
 api.post('/citas', wrap(async (q, s) => {
   if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });

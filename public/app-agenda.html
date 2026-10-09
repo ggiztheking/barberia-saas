@@ -1,16 +1,16 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Agenda"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=13"></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=16"></head><body>
 <header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mi cuenta</a></nav></header>
 <main>
 <section id="agendar"><div id="flujo">
-<h2>Agenda tu cita</h2><p>Unos cuantos toques y listo: tu lugar queda apartado al confirmar.</p>
-<div class="paso" id="p1"><h3><span class="n">1</span>Servicio</h3><div class="chips" id="fs"></div><div class="opts" id="srv"></div></div>
+<h2 id="saludo">Agenda tu cita</h2><p>Unos cuantos toques y listo: tu lugar queda apartado al confirmar.</p><div id="rapido"></div>
+<div class="paso" id="p1"><h3><span class="n">1</span>Servicio</h3><div class="chips" id="fs"></div><p class="franja" id="srv-t" hidden>Los más pedidos</p><div class="opts" id="srv"></div><button class="alt" id="srv-mas" hidden style="width:100%;margin-top:10px"></button></div>
 <div class="paso" id="p2"><h3><span class="n">2</span>Barbero</h3><div class="opts" id="bar"></div></div>
 <div class="paso" id="p3"><h3><span class="n">3</span>Día</h3><div class="dias" id="dias"></div></div>
 <div class="paso" id="p4"><h3><span class="n">4</span>Hora</h3><div id="horas"><div class="vacio">Elige un día para ver los horarios.</div></div></div>
 <div class="paso" id="p5"><h3><span class="n">5</span>Tus datos</h3>
-<label for="nom">Nombre</label><input id="nom" autocomplete="name" placeholder="Cómo te llamas"><label for="tel">WhatsApp</label><input id="tel" inputmode="tel" autocomplete="tel" placeholder="10 dígitos"></div>
+<label for="nom">Nombre</label><input id="nom" autocomplete="name" placeholder="Cómo te llamas"><label for="tel">WhatsApp</label><input id="tel" inputmode="tel" autocomplete="tel" placeholder="999 123 4567" maxlength="14"><small id="tel-e" class="aviso-campo" hidden>Escribe los 10 dígitos de tu WhatsApp.</small></div>
 <div id="err" role="alert"></div></div><div id="hecho" hidden></div></section>
 <section id="estilos" hidden><h2>Estilos de corte</h2><div class="chips" id="filtros"></div><div class="grid" id="eg"></div></section>
 <section id="productos" hidden><h2>Productos</h2><p>Pregunta por ellos en tu próxima visita.</p><div class="grid" id="pg"></div></section>
@@ -24,6 +24,7 @@ const J=(u,b)=>fetch('/api/'+N+u,b&&{method:'POST',headers:{'Content-Type':'appl
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),hoy=()=>iso(new Date());
 const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fd=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'}),fc=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
+const h12=h=>{if(!h)return '';const H=+h.slice(0,2);return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
 const toast=t=>{$$('.toast').forEach(x=>x.remove());const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),3200)};
 let S={};try{S=JSON.parse(localStorage['b_'+N]||'{}')}catch(e){}S.codigos=S.codigos||[];const guarda=()=>{try{localStorage['b_'+N]=JSON.stringify(S)}catch(e){}};
 let I={},E=[],HORAS=[],tipo='todos',ftipo='todos',X={srv:null,bar:null,dia:null,hora:null};
@@ -34,8 +35,12 @@ addEventListener('hashchange',ir);
 const TIPOS=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['servicio','Barba y combos']];
 const chips=(el,act,fn)=>{el.innerHTML=TIPOS.filter(([k])=>k==='todos'||E.some(e=>e.tipo===k)).map(([k,t])=>`<button aria-pressed="${k===act}" data-k="${k}">${t}</button>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>fn(b.dataset.k))};
 function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${esc(e.nombre)}</h3><p>${esc(e.descripcion)}</p><b>${m(e.precio)}</b></div>`).join('');chips($('#filtros'),tipo,k=>{tipo=k;pintaE()})}
-function pintaS(){chips($('#fs'),ftipo,k=>{ftipo=k;pintaS()});
-$('#srv').innerHTML=E.filter(e=>ftipo==='todos'||e.tipo===ftipo).map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}">${e.img?`<span class="img" style="background-image:url(/i/${Number(e.img)})"></span>`:''}<strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
+let TODOS=false;
+function pintaS(){chips($('#fs'),ftipo,k=>{ftipo=k;TODOS=true;pintaS()});
+const top=[...E].filter(e=>e.pop>0).sort((x,y)=>y.pop-x.pop).slice(0,4),corto=!TODOS&&ftipo==='todos'&&top.length>=2&&E.length>top.length+1;
+const L=corto?[...top,...(X.srv&&!top.includes(X.srv)?[X.srv]:[])]:E.filter(e=>ftipo==='todos'||e.tipo===ftipo);
+$('#fs').hidden=corto;$('#srv-t').hidden=!corto;$('#srv-mas').hidden=!corto;$('#srv-mas').textContent='Ver los '+E.length+' servicios';
+$('#srv').innerHTML=L.map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}">${e.img?`<span class="img" style="background-image:url(/i/${Number(e.img)})"></span>`:''}<strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
 $$('#srv .opt').forEach(b=>b.onclick=()=>{X.srv=E.find(e=>e.id==b.dataset.id);pintaS();estado();if(!X.bar)baja('#p2')})}
 function pintaB(){const L=I.barberos.length>1?[['cualquiera','Cualquiera','El primero disponible']]:[];I.barberos.forEach(b=>L.push([b,b,'']));
 $('#bar').innerHTML=L.map(([v,t,d])=>`<button class="opt" aria-pressed="${X.bar===v}" data-v="${esc(v)}">${v!=='cualquiera'&&(I.fotos_barberos||{})[v]?`<span class="av ft" style="background-image:url(/i/${Number(I.fotos_barberos[v])})"></span>`:`<span class="av">${v==='cualquiera'?'✦':esc(t.trim()[0]||'?').toUpperCase()}</span>`}<strong>${esc(t)}</strong>${d?`<small>${d}</small>`:''}</button>`).join('');
@@ -45,7 +50,7 @@ $('#dias').innerHTML=L.map(([f,d,cz],k)=>`<button class="dia" data-f="${f}" aria
 $$('#dias .dia').forEach(b=>b.onclick=()=>{X.dia=b.dataset.f;X.hora=null;pintaD();horas();estado()})}
 async function libres(f,b){const t=await J('/horarios?fecha='+f+'&barbero='+encodeURIComponent(b)),ya=f===hoy()?new Date().getHours():-1;return HORAS.map(h=>[h,!t.includes(h)&&+h.slice(0,2)>ya])}
 const franjas=(L,act)=>{const G=[['Mañana',h=>h<12],['Tarde',h=>h>=12&&h<18],['Noche',h=>h>=18]].map(([t,f])=>[t,L.filter(([h])=>f(+h.slice(0,2)))]).filter(([,l])=>l.length);
-return L.some(([,ok])=>ok)?G.map(([t,l])=>`<div class="franja">${t}</div><div class="chips">${l.map(([h,ok])=>`<button data-h="${h}" ${ok?'':'disabled'} aria-pressed="${act===h}">${h}</button>`).join('')}</div>`).join(''):'<div class="vacio">No quedan horarios este día. Prueba con otro.</div>'};
+return L.some(([,ok])=>ok)?G.map(([t,l])=>`<div class="franja">${t}</div><div class="chips">${l.map(([h,ok])=>`<button data-h="${h}" ${ok?'':'disabled'} aria-pressed="${act===h}">${h12(h)}</button>`).join('')}</div>`).join(''):'<div class="vacio">No quedan horarios este día. Prueba con otro.</div>'};
 async function horas(){const el=$('#horas');if(!X.dia||!X.bar){el.innerHTML=`<div class="vacio">Elige ${!X.bar?'un barbero':'un día'} para ver los horarios.</div>`;return}
 el.innerHTML='<div class="vacio">Buscando horarios…</div>';const f=X.dia,b=X.bar;
 try{const L=await libres(f,b);if(f!==X.dia||b!==X.bar)return;el.innerHTML=franjas(L,X.hora);el.querySelectorAll('button[data-h]').forEach(x=>x.onclick=()=>{X.hora=x.dataset.h;el.querySelectorAll('button[data-h]').forEach(y=>y.setAttribute('aria-pressed',y===x));estado();if(!$('#nom').value)baja('#p5')})}
@@ -53,16 +58,19 @@ catch(e){el.innerHTML='<div class="vacio">No se pudieron cargar los horarios. Re
 const baja=s=>setTimeout(()=>{const e=$(s);if(e&&e.getBoundingClientRect().top>innerHeight*.6)e.scrollIntoView({behavior:'smooth',block:'start'})},120);
 function estado(){const n=$('#nom').value.trim(),t=$('#tel').value.replace(/\D/g,''),ok=[X.srv,X.bar,X.dia,X.hora,n&&t.length>=10];
 ['#p1','#p2','#p3','#p4','#p5'].forEach((p,k)=>$(p).classList.toggle('hecho',!!ok[k]));const falta=ok.findIndex(x=>!x);
-$('#res').innerHTML=X.srv?`<b>${esc(X.srv.nombre)} · ${m(X.srv.precio)}</b>${[X.bar==='cualquiera'?'Cualquier barbero':X.bar,X.dia&&fc(X.dia),X.hora].filter(Boolean).map(esc).join(' · ')||'Elige barbero, día y hora'}`:'<b>Elige tu servicio</b>Paso 1 de 5';
-if(falta===4&&X.hora)$('#res').innerHTML+=' · faltan tus datos';$('#go').disabled=falta!==-1}
-['#nom','#tel'].forEach(s=>$(s).oninput=estado);
+$('#res').innerHTML=X.srv?`<b>${esc(X.srv.nombre)} · ${m(X.srv.precio)}</b>${[X.bar==='cualquiera'?'Cualquier barbero':X.bar,X.dia&&fc(X.dia),h12(X.hora)].filter(Boolean).map(esc).join(' · ')||'Elige barbero, día y hora'}`:'<b>Elige tu servicio</b>Paso 1 de 5';
+if(falta===4&&X.hora)$('#res').innerHTML+=' · '+(!$('#nom').value.trim()?'falta tu nombre':'falta tu WhatsApp');$('#go').disabled=falta!==-1}
+const fmtTel=v=>{const d=v.replace(/\D/g,'').replace(/^52(?=\d{10}$)/,'').slice(0,10);return d.length>6?d.slice(0,3)+' '+d.slice(3,6)+' '+d.slice(6):d.length>3?d.slice(0,3)+' '+d.slice(3):d};
+$('#nom').oninput=estado;$('#tel').oninput=e=>{const p=e.target.selectionStart===e.target.value.length;e.target.value=fmtTel(e.target.value);if(p)e.target.selectionStart=e.target.value.length;$('#tel-e').hidden=true;estado()};
+$('#tel').onblur=()=>{const n=$('#tel').value.replace(/\D/g,'').length;$('#tel-e').hidden=!n||n===10};
+$('#srv-mas').onclick=()=>{TODOS=true;pintaS()};
 function ics(c,f,h){const p=f.replace(/-/g,''),h0=h.replace(':',''),h1=String(+h.slice(0,2)+1).padStart(2,'0')+h.slice(3,5);
 return 'data:text/calendar;charset=utf8,'+encodeURIComponent(`BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Agenda//ES\nBEGIN:VEVENT\nUID:${c}@barberia\nDTSTAMP:${p}T000000Z\nDTSTART;TZID=America/Merida:${p}T${h0}00\nDTEND;TZID=America/Merida:${p}T${h1}00\nSUMMARY:Cita en ${I.nombre}\nLOCATION:${(I.direccion||'').replace(/,/g,'\\,')}\nEND:VEVENT\nEND:VCALENDAR`)}
 $('#go').onclick=async()=>{const g=$('#go');g.disabled=true;g.textContent='Apartando…';$('#err').innerHTML='';
 try{const nom=$('#nom').value.trim(),tel=$('#tel').value.trim(),d=await J('/citas',{cliente:nom,telefono:tel,barbero:X.bar,servicio:X.srv.nombre,fecha:X.dia,hora:X.hora});
-S.nom=nom;S.tel=tel;S.codigos.push(d.codigo);guarda();
+S.nom=nom;S.tel=tel;S.codigos.push(d.codigo);S.ult={srv:X.srv.nombre,bar:d.barbero};guarda();
 $('#hecho').innerHTML=`<div class="exito"><div class="check" aria-hidden="true">✓</div><h2 style="text-align:center">Te esperamos, ${esc(nom.split(' ')[0])}</h2><p>Tu cita quedó apartada.</p></div>
-<div class="ficha"><dl><dt>Servicio</dt><dd>${esc(X.srv.nombre)}</dd><dt>Barbero</dt><dd>${esc(d.barbero)}</dd><dt>Cuándo</dt><dd>${fd(X.dia)} · ${esc(X.hora)}</dd><dt>Total</dt><dd>${m(d.precio)}</dd>${I.direccion?`<dt>Dónde</dt><dd>${esc(I.direccion)}${I.maps?` · <a style="color:var(--gold)" href="${esc(I.maps)}">Cómo llegar</a>`:''}</dd>`:''}</dl></div>
+<div class="ficha"><dl><dt>Servicio</dt><dd>${esc(X.srv.nombre)}</dd><dt>Barbero</dt><dd>${esc(d.barbero)}</dd><dt>Cuándo</dt><dd>${fd(X.dia)} · ${h12(X.hora)}</dd><dt>Total</dt><dd>${m(d.precio)}</dd>${I.direccion?`<dt>Dónde</dt><dd>${esc(I.direccion)}${I.maps?` · <a style="color:var(--gold)" href="${esc(I.maps)}">Cómo llegar</a>`:''}</dd>`:''}</dl></div>
 <div class="acc"><a class="btn" download="cita.ics" href="${ics(d.codigo,X.dia,X.hora)}">Agregar a mi calendario</a><a class="btn alt" href="#mis">${YO?'Ver mi cuenta':'Ver mis citas'}</a><button class="alt" id="otra">Agendar otra</button></div>
 <p style="margin-top:18px;font-size:14px">Si no puedes llegar, cambia o cancela tu cita desde "Mi cuenta".${YO?'':' Crea tu cuenta ahí para verla desde cualquier celular.'}</p>`;
 $('#flujo').hidden=true;$('#hecho').hidden=false;ir();scrollTo({top:0,behavior:'smooth'});
@@ -70,15 +78,23 @@ $('#otra').onclick=()=>{X={srv:null,bar:null,dia:null,hora:null};$('#hecho').hid
 catch(e){$('#err').innerHTML=`<div class="msg" style="border-color:#5e3333">${esc(e.message)}</div>`;X.hora=null;horas();toast(e.message)}
 finally{g.textContent='Confirmar';estado()}};
 let YO=null;
+function elige(srvNombre,bar,dia,hora){if(srvNombre){const e=E.find(x=>x.nombre===srvNombre);if(e)X.srv=e}if(bar&&I.barberos.includes(bar))X.bar=bar;if(dia)X.dia=dia;if(hora)X.hora=hora;
+pintaS();pintaB();pintaD();horas();estado();const p=!X.srv?'#p1':!X.dia?'#p3':!X.hora?'#p4':'#p5';setTimeout(()=>$(p).scrollIntoView({behavior:'smooth',block:'start'}),150)}
+async function rapido(){const el=$('#rapido'),ult=S.ult||(YO&&YO.historial&&YO.historial.find(x=>x.estado==='completada'));let html='';
+const nom=(YO&&YO.nombre)||S.nom;if(nom)$('#saludo').textContent='Hola, '+nom.trim().split(' ')[0];
+if(ult){const sv=ult.srv||ult.servicio,bb=ult.bar||ult.barbero;if(E.some(e=>e.nombre===sv))html+=`<button class="atajo" id="r-ult"><span>¿Lo de siempre?</span><b>${esc(sv)}${I.barberos.includes(bb)?' con '+esc(bb):''}</b><small>Toca para elegirlo y solo escoge el horario</small></button>`}
+try{const P=await J('/proximo');if(P.length){const p=P[0],d=p.fecha===hoy()?'Hoy':fc(p.fecha);html+=`<button class="atajo" id="r-prox"><span>Lo antes posible</span><b>${esc(d)} · ${h12(p.hora)}</b><small>Con ${esc(p.barbero)}. Toca para apartarlo</small></button>`;el._p=p}}catch(e){}
+el.innerHTML=html?`<div class="atajos">${html}</div>`:'';const u=$('#r-ult'),x=$('#r-prox');
+if(u)u.onclick=()=>elige(ult.srv||ult.servicio,ult.bar||ult.barbero);if(x)x.onclick=()=>{const p=el._p;elige(null,p.barbero,p.fecha,p.hora)}}
 const P=(u,b)=>J(u,b||{});
 const tarjeta=x=>{const d=new Date(x.fecha+'T12:00');return `<div class="cita" data-c="${esc(x.codigo)}"><div class="fecha"><span>${d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></div>
-<div class="info"><h3>${esc(x.servicio)}</h3><p>${esc(x.hora)} con ${esc(x.barbero)} · ${m(x.precio)}</p><div class="acc mini"><button class="alt" data-a="mover">Cambiar horario</button><button class="alt" data-a="cancelar">Cancelar</button></div></div><div class="mov" hidden></div></div>`};
+<div class="info"><h3>${esc(x.servicio)}</h3><p>${h12(x.hora)} con ${esc(x.barbero)} · ${m(x.precio)}</p><div class="acc mini"><button class="alt" data-a="mover">Cambiar horario</button><button class="alt" data-a="cancelar">Cancelar</button></div></div><div class="mov" hidden></div></div>`};
 const acciones=(el,L)=>el.querySelectorAll('.cita[data-c]').forEach(k=>{const x=L.find(y=>y.codigo===k.dataset.c);if(!x)return;
-k.querySelector('[data-a=cancelar]').onclick=async()=>{if(!confirm('¿Cancelar tu cita del '+fd(x.fecha)+' a las '+x.hora+'?'))return;try{await J('/cancelar',{codigo:x.codigo});toast('Tu cita fue cancelada');mis()}catch(e){toast(e.message)}};
+k.querySelector('[data-a=cancelar]').onclick=async()=>{if(!confirm('¿Cancelar tu cita del '+fd(x.fecha)+' a las '+h12(x.hora)+'?'))return;try{await J('/cancelar',{codigo:x.codigo});toast('Tu cita fue cancelada');mis()}catch(e){toast(e.message)}};
 k.querySelector('[data-a=mover]').onclick=()=>mover(k,x)});
 const EST={pendiente:'Pendiente',completada:'Atendida',cancelada:'Cancelada',no_llego:'No llegó'};
 async function cargaYo(){try{const r=await fetch('/api/'+N+'/cliente/yo');YO=r.ok?await r.json():null}catch(e){YO=null}
-if(YO){$('#nom').value=YO.nombre;$('#tel').value=YO.telefono;estado()}return YO}
+if(YO){$('#nom').value=YO.nombre;$('#tel').value=fmtTel(YO.telefono);estado();if(I.nombre)rapido()}return YO}
 async function mis(){const el=$('#mlist');el.innerHTML='<div class="vacio">Cargando…</div>';await cargaYo();
 if(YO){const h=YO.historial;
 el.innerHTML=`<div class="cuenta-cab"><span class="av">${esc((YO.nombre.trim()[0]||'?').toUpperCase())}</span><div style="flex:1"><b style="font-weight:400;font-size:19px">${esc(YO.nombre)}</b><br><small style="color:var(--dim)">${esc(YO.telefono)}</small></div><button class="alt" id="c-salir" style="padding:10px 14px;font-size:11px">Salir</button></div>
@@ -108,13 +124,13 @@ return `<div class="franja">Nuevo día</div><div class="dias">${L.map(([g,d,cz])
 const pinta=async()=>{v.innerHTML=dias();v.querySelectorAll('.dia').forEach(b=>b.onclick=()=>{f=b.dataset.f;h=null;pinta()});const ok=v.querySelector('[data-ok]');
 if(f){const hh=v.querySelector('.hh');hh.innerHTML='<div class="vacio" style="margin-top:10px">Buscando horarios…</div>';const L=await libres(f,x.barbero);hh.innerHTML=franjas(L,h);
 hh.querySelectorAll('button[data-h]').forEach(b=>b.onclick=()=>{h=b.dataset.h;hh.querySelectorAll('button[data-h]').forEach(y=>y.setAttribute('aria-pressed',y===b));ok.disabled=false})}
-ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codigo,fecha:f,hora:h});toast('Listo: '+fd(f)+' a las '+h);mis()}catch(e){toast(e.message);ok.disabled=false}}};pinta()}
+ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codigo,fecha:f,hora:h});toast('Listo: '+fd(f)+' a las '+h12(h));mis()}catch(e){toast(e.message);ok.disabled=false}}};pinta()}
 (async()=>{try{I=await J('/info')}catch(e){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">No se pudo cargar la agenda. Revisa tu conexión y recarga.</div>';return}
 document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
 $('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'');
-$('#nom').value=S.nom||'';$('#tel').value=S.tel||'';
+$('#nom').value=S.nom||'';$('#tel').value=fmtTel(S.tel||'');
 E=await J('/estilos');pintaE();
 $('#pg').innerHTML=(await J('/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
 if(!I.abierto){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">Esta barbería no está recibiendo citas en línea por ahora.'+(I.whatsapp?' Escríbenos por <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>.':'')+'</div>';ir();return}
-if(I.barberos.length===1)X.bar=I.barberos[0];{const pb=new URLSearchParams(location.search).get('barbero');if(pb&&I.barberos.includes(pb))X.bar=pb}pintaS();pintaB();pintaD();horas();estado();ir();cargaYo()})();
+if(I.barberos.length===1)X.bar=I.barberos[0];rapido();{const pb=new URLSearchParams(location.search).get('barbero');if(pb&&I.barberos.includes(pb))X.bar=pb}pintaS();pintaB();pintaD();horas();estado();ir();cargaYo()})();
 </script></body></html>
