@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Agenda"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=16"></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
 <header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mi cuenta</a></nav></header>
 <main>
 <section id="agendar"><div id="flujo">
@@ -18,6 +18,7 @@
 </main>
 <div class="barra" id="barra" hidden><div id="res"><b>Elige tu servicio</b>Paso 1 de 5</div><button id="go" disabled>Confirmar</button></div>
 <footer style="max-width:760px;margin:auto;padding:0 24px 40px;color:var(--dim)" id="fn"></footer>
+<script src="/galeria.js?v=1"></script>
 <script>
 const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],m=x=>'$'+Number(x).toLocaleString('es-MX');
 const J=(u,b)=>fetch('/api/'+N+u,b&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Algo salió mal');return d});
@@ -27,7 +28,7 @@ const fd=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'long',day:
 const h12=h=>{if(!h)return '';const H=+h.slice(0,2);return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
 const toast=t=>{$$('.toast').forEach(x=>x.remove());const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),3200)};
 let S={};try{S=JSON.parse(localStorage['b_'+N]||'{}')}catch(e){}S.codigos=S.codigos||[];const guarda=()=>{try{localStorage['b_'+N]=JSON.stringify(S)}catch(e){}};
-let I={},E=[],HORAS=[],tipo='todos',ftipo='todos',X={srv:null,bar:null,dia:null,hora:null};
+let TR=[],I={},E=[],HORAS=[],tipo='todos',ftipo='todos',X={srv:null,bar:null,dia:null,hora:null};
 $('link[rel=manifest]').href='/'+N+'/manifest.json';$('#logo').href='/'+N;if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 function ir(){const h=(location.hash||'#agendar').slice(1);$$('main>section').forEach(s=>s.hidden=s.id!==h);$$('nav a').forEach(a=>a.setAttribute('aria-current',a.hash==='#'+h));
 const b=h==='agendar'&&$('#hecho').hidden&&I.abierto;$('#barra').hidden=!b;document.body.classList.toggle('con-barra',b);if(h==='mis')mis()}
@@ -36,15 +37,20 @@ const TIPOS=[['todos','Todos'],['clásico','Clásicos'],['nuevo','Nuevos'],['ser
 const chips=(el,act,fn)=>{el.innerHTML=TIPOS.filter(([k])=>k==='todos'||E.some(e=>e.tipo===k)).map(([k,t])=>`<button aria-pressed="${k===act}" data-k="${k}">${t}</button>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>fn(b.dataset.k))};
 function pintaE(){$('#eg').innerHTML=E.filter(e=>tipo==='todos'||e.tipo===tipo).map(e=>`<div class="card"><h3>${esc(e.nombre)}</h3><p>${esc(e.descripcion)}</p><b>${m(e.precio)}</b></div>`).join('');chips($('#filtros'),tipo,k=>{tipo=k;pintaE()})}
 let TODOS=false;
+const deS=id=>TR.filter(t=>t.servicio_id===id),deB=b=>TR.filter(t=>t.barbero===b);
+const imgS=e=>{const f=deS(e.id),im=e.img||(f[0]&&f[0].img);return (im?`<span class="img" style="background-image:url(/i/${Number(im)})"></span>`:'')+(f.length?`<span class="fotos" data-gs="${Number(e.id)}">${f.length} foto${f.length===1?'':'s'}</span>`:'')};
+const nb=v=>{const n=v==='cualquiera'?0:deB(v).length;return n?`<span class="fotos" data-gb="${esc(v)}">${n} trabajo${n===1?'':'s'}</span>`:''};
+function galS(){$$('#srv [data-gs]').forEach(f=>f.onclick=ev=>{ev.stopPropagation();const e=E.find(x=>x.id==f.dataset.gs);galeria(deS(e.id).map(capTrab),0,{accion:'Elegir '+e.nombre,fn:()=>{X.srv=e;pintaS();estado();if(!X.bar)baja('#p2')}})})}
+function galB(){$$('#bar [data-gb]').forEach(f=>f.onclick=ev=>{ev.stopPropagation();const b=f.dataset.gb;galeria(deB(b).map(capTrab),0,{accion:'Agendar con '+b.split(' ')[0],fn:()=>{X.bar=b;X.hora=null;pintaB();horas();estado();if(!X.dia)baja('#p3')}})})}
 function pintaS(){chips($('#fs'),ftipo,k=>{ftipo=k;TODOS=true;pintaS()});
 const top=[...E].filter(e=>e.pop>0).sort((x,y)=>y.pop-x.pop).slice(0,4),corto=!TODOS&&ftipo==='todos'&&top.length>=2&&E.length>top.length+1;
 const L=corto?[...top,...(X.srv&&!top.includes(X.srv)?[X.srv]:[])]:E.filter(e=>ftipo==='todos'||e.tipo===ftipo);
 $('#fs').hidden=corto;$('#srv-t').hidden=!corto;$('#srv-mas').hidden=!corto;$('#srv-mas').textContent='Ver los '+E.length+' servicios';
-$('#srv').innerHTML=L.map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}">${e.img?`<span class="img" style="background-image:url(/i/${Number(e.img)})"></span>`:''}<strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
-$$('#srv .opt').forEach(b=>b.onclick=()=>{X.srv=E.find(e=>e.id==b.dataset.id);pintaS();estado();if(!X.bar)baja('#p2')})}
+$('#srv').innerHTML=L.map(e=>`<button class="opt" aria-pressed="${X.srv&&X.srv.id===e.id}" data-id="${e.id}">${imgS(e)}<strong>${esc(e.nombre)}</strong><small>${esc(e.descripcion)}</small><em>${m(e.precio)}</em></button>`).join('');
+$$('#srv .opt').forEach(b=>b.onclick=()=>{X.srv=E.find(e=>e.id==b.dataset.id);pintaS();estado();if(!X.bar)baja('#p2')});galS()}
 function pintaB(){const L=I.barberos.length>1?[['cualquiera','Cualquiera','El primero disponible']]:[];I.barberos.forEach(b=>L.push([b,b,'']));
-$('#bar').innerHTML=L.map(([v,t,d])=>`<button class="opt" aria-pressed="${X.bar===v}" data-v="${esc(v)}">${v!=='cualquiera'&&(I.fotos_barberos||{})[v]?`<span class="av ft" style="background-image:url(/i/${Number(I.fotos_barberos[v])})"></span>`:`<span class="av">${v==='cualquiera'?'✦':esc(t.trim()[0]||'?').toUpperCase()}</span>`}<strong>${esc(t)}</strong>${d?`<small>${d}</small>`:''}</button>`).join('');
-$$('#bar .opt').forEach(b=>b.onclick=()=>{X.bar=b.dataset.v;X.hora=null;pintaB();horas();estado();if(!X.dia)baja('#p3')})}
+$('#bar').innerHTML=L.map(([v,t,d])=>`<button class="opt" aria-pressed="${X.bar===v}" data-v="${esc(v)}">${v!=='cualquiera'&&(I.fotos_barberos||{})[v]?`<span class="av ft" style="background-image:url(/i/${Number(I.fotos_barberos[v])})"></span>`:`<span class="av">${v==='cualquiera'?'✦':esc(t.trim()[0]||'?').toUpperCase()}</span>`}<strong>${esc(t)}</strong>${d?`<small>${d}</small>`:''}${nb(v)}</button>`).join('');
+$$('#bar .opt').forEach(b=>b.onclick=()=>{X.bar=b.dataset.v;X.hora=null;pintaB();horas();estado();if(!X.dia)baja('#p3')});galB()}
 function pintaD(){const c=(I.cierra||'').split(','),L=[];for(let k=0;k<14;k++){const d=new Date();d.setDate(d.getDate()+k);L.push([iso(d),d,c.includes(String(d.getDay()))])}
 $('#dias').innerHTML=L.map(([f,d,cz],k)=>`<button class="dia" data-f="${f}" aria-pressed="${X.dia===f}" ${cz?'disabled title="Cerrado"':''}><span>${k===0?'Hoy':k===1?'Mañana':d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${cz?'Cerrado':d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></button>`).join('');
 $$('#dias .dia').forEach(b=>b.onclick=()=>{X.dia=b.dataset.f;X.hora=null;pintaD();horas();estado()})}
@@ -129,7 +135,7 @@ ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codig
 document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
 $('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'');
 $('#nom').value=S.nom||'';$('#tel').value=fmtTel(S.tel||'');
-E=await J('/estilos');pintaE();
+E=await J('/estilos');try{TR=(await J('/trabajos')).filter(t=>!t.barbero||I.barberos.includes(t.barbero))}catch(e){TR=[]}pintaE();
 $('#pg').innerHTML=(await J('/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
 if(!I.abierto){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">Esta barbería no está recibiendo citas en línea por ahora.'+(I.whatsapp?' Escríbenos por <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>.':'')+'</div>';ir();return}
 if(I.barberos.length===1)X.bar=I.barberos[0];rapido();{const pb=new URLSearchParams(location.search).get('barbero');if(pb&&I.barberos.includes(pb))X.bar=pb}pintaS();pintaB();pintaD();horas();estado();ir();cargaYo()})();

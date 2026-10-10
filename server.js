@@ -126,6 +126,7 @@ const seed = async id => {
   await pool.query('CREATE TABLE IF NOT EXISTS imagenes (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, tipo TEXT NOT NULL, ref TEXT NOT NULL, mime TEXT NOT NULL, data BYTEA NOT NULL, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS imagenes_ref ON imagenes(negocio_id, tipo, ref)');
   for (const c of ['lema', 'acerca', 'estacionamiento', 'zonas', 'instagram']) await pool.query(`ALTER TABLE negocios ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+  await pool.query('CREATE TABLE IF NOT EXISTS trabajos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, img INT NOT NULL, servicio_id INT, barbero TEXT, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE TABLE IF NOT EXISTS perfiles (negocio_id INT NOT NULL, barbero TEXT NOT NULL, especialidad TEXT, bio TEXT, instagram TEXT, PRIMARY KEY (negocio_id, barbero))');
   await pool.query('CREATE TABLE IF NOT EXISTS eventos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, titulo TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, descripcion TEXT, cupo INT, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE TABLE IF NOT EXISTS asistentes (evento_id INT NOT NULL, nombre TEXT NOT NULL, telefono TEXT NOT NULL, creado TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (evento_id, telefono))');
@@ -229,7 +230,7 @@ api.use((q, s, n) => {
   n();
 });
 // El barbero solo ve y toca lo suyo; el resto del panel es del dueño.
-const BARB_OK = /^\/admin\/(citas|cita|corte|bloqueos|bloqueo|me|salir|mi-clave|perfil)(\/|$)/;
+const BARB_OK = /^\/admin\/(citas|cita|corte|bloqueos|bloqueo|me|salir|mi-clave|perfil|trabajos|trabajo)(\/|$)/;
 const mio = q => (q.user && q.user.rol === 'barbero' ? q.user.barbero : null);
 const auth = async (q, s, n) => {
   try {
@@ -298,6 +299,35 @@ api.post('/admin/equipo/:id', auth, wrap(async (q, s) => {
   if (a !== 'desactivar' && a !== 'activar') return s.status(400).json({ error: 'Acción no válida' });
   await pool.query('UPDATE usuarios SET activo=$1 WHERE id=$2', [a === 'activar', u.id]);
   if (a === 'desactivar') await pool.query("DELETE FROM sesiones WHERE tipo='staff' AND ref_id=$1", [u.id]);
+  s.json({ ok: true });
+}));
+
+// ---- Galería de trabajos (varias fotos por corte y por barbero)
+const leeImg = (data, max = 700 * 1024) => {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(data || ''));
+  if (!m) return { error: 'La foto debe ser JPG, PNG o WebP' };
+  const buf = Buffer.from(m[2], 'base64');
+  if (!/^ffd8ff|^89504e47|^52494646.{8}57454250/.test(buf.subarray(0, 12).toString('hex'))) return { error: 'El archivo no parece una imagen válida' };
+  if (buf.length > max) return { error: 'La foto es demasiado pesada' };
+  return { mime: m[1], buf };
+};
+const SQL_TRAB = "SELECT t.id,t.img,t.barbero,t.servicio_id,e.nombre AS servicio FROM trabajos t LEFT JOIN estilos e ON e.id=t.servicio_id AND e.negocio_id=t.negocio_id WHERE t.negocio_id=$1";
+api.get('/trabajos', wrap(async (q, s) => s.json((await pool.query(SQL_TRAB + ' ORDER BY t.id DESC LIMIT 300', [q.neg.id])).rows)));
+api.get('/admin/trabajos', auth, wrap(async (q, s) => s.json((await pool.query(SQL_TRAB + ' AND ($2::text IS NULL OR t.barbero=$2) ORDER BY t.id DESC', [q.neg.id, mio(q)])).rows)));
+api.post('/admin/trabajo', auth, wrap(async (q, s) => {
+  const n = q.neg, im = leeImg(q.body.data);
+  if (im.error) return s.status(400).json({ error: im.error });
+  if ((await pool.query('SELECT COUNT(*)::int c FROM trabajos WHERE negocio_id=$1', [n.id])).rows[0].c >= 300) return s.status(400).json({ error: 'Llegaste al límite de 300 fotos. Borra algunas para subir más.' });
+  const bar = mio(q) || (bars(n).includes(q.body.barbero) ? q.body.barbero : null);
+  let sid = parseInt(q.body.servicio_id) || null;
+  if (sid && !(await pool.query('SELECT 1 FROM estilos WHERE id=$1 AND negocio_id=$2', [sid, n.id])).rowCount) sid = null;
+  const img = (await pool.query("INSERT INTO imagenes(negocio_id,tipo,ref,mime,data) VALUES($1,'trabajo',$2,$3,$4) RETURNING id", [n.id, 't' + Date.now() + crypto.randomBytes(3).toString('hex'), im.mime, im.buf])).rows[0].id;
+  s.json({ id: (await pool.query('INSERT INTO trabajos(negocio_id,img,servicio_id,barbero) VALUES($1,$2,$3,$4) RETURNING id', [n.id, img, sid, bar])).rows[0].id });
+}));
+api.post('/admin/trabajo/borrar', auth, wrap(async (q, s) => {
+  const r = await pool.query('DELETE FROM trabajos WHERE id=$1 AND negocio_id=$2 AND ($3::text IS NULL OR barbero=$3) RETURNING img', [q.body.id, q.neg.id, mio(q)]);
+  if (!r.rowCount) return s.status(404).json({ error: 'No encontramos esa foto' });
+  await pool.query('DELETE FROM imagenes WHERE id=$1 AND negocio_id=$2', [r.rows[0].img, q.neg.id]);
   s.json({ ok: true });
 }));
 

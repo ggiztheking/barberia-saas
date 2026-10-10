@@ -1,5 +1,5 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=16"></head><body>
+<title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
 <header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
 <div id="plan"></div>
 <section data-tab="hoy"><div id="pasos"></div><div class="acc" style="margin-bottom:6px"><button class="alt" onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button class="alt" onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
@@ -35,10 +35,12 @@
 <h2 style="margin-top:34px">Preguntas frecuentes</h2><p>Aparecen en tu página y ayudan a que Google te muestre mejor.</p><div id="preguntas"></div></section>
 <section data-tab="ajustes" hidden><div id="miperfil" hidden><h2>Mi perfil</h2><p>Así te ven los clientes en la página de la barbería.</p><div class="panel" id="mp"></div></div><div class="solo-dueno"><h2>Mi barbería</h2><div id="aj"></div>
 <h2 style="margin-top:34px">Equipo</h2><p>Cada persona entra con su propio correo y contraseña. Los barberos solo ven y manejan sus propias citas.</p><div id="equipo"></div></div>
+<h2 style="margin-top:34px">Galería de trabajos</h2><p>Fotos de cortes que han hecho. Tus clientes las ven al elegir el corte o el barbero, y en tu página.</p><div id="trab"></div>
 <h2 style="margin-top:34px">Descansos y días libres</h2><div id="blq"></div>
 <div class="solo-dueno"><h2 style="margin-top:34px">Servicios y precios</h2><div id="cat"></div></div>
 <h2 style="margin-top:34px">Mi cuenta</h2><div id="micuenta"></div></section>
 </main><button class="fab-p" id="fab" aria-label="Acciones rápidas" onclick="acciones()">+</button>
+<script src="/galeria.js?v=1"></script>
 <script>
 const N=location.pathname.split('/')[1],$=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 $('#lp').href='/'+N;$('#la').href='/'+N+'/agenda';$('#lc').href='/'+N+'/crm';
@@ -75,7 +77,7 @@ let BARS=[],SERV=[],NEG='',HI=10,HF=19,CL=[],FIL='todos';
 const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],opt=l=>l.map(x=>`<option>${esc(x)}</option>`).join(''),kp=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`;
 async function ajustes(){const a=await J('/admin/ajustes');banner(a);BARS=a.barberos.split(',').map(x=>x.trim()).filter(Boolean);NEG=a.nombre;HI=+a.hora_ini;HF=+a.hora_fin;
 $('#aj').innerHTML=`<p>Tu enlace para clientes: <a style="color:var(--gold)" href="/${N}">${location.host}/${N}</a> · <a style="color:var(--gold)" href="/${N}/cartel">Imprimir cartel con QR</a></p>`+CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+
-`<label>Días que no abre</label><div class="acc" style="margin:8px 0 20px;gap:16px">${DS.map((d,i)=>`<label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><input type="checkbox" class="cz" value="${i}" style="width:auto;margin:0" ${(a.cierra||'').split(',').includes(String(i))?'checked':''}>${d}</label>`).join('')}</div><button onclick="guardaAj()">Guardar cambios</button>`;forms();bloqueos()}
+`<label>Días que no abre</label><div class="acc" style="margin:8px 0 20px;gap:16px">${DS.map((d,i)=>`<label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><input type="checkbox" class="cz" value="${i}" style="width:auto;margin:0" ${(a.cierra||'').split(',').includes(String(i))?'checked':''}>${d}</label>`).join('')}</div><button onclick="guardaAj()">Guardar cambios</button>`;forms();bloqueos();trabajos()}
 async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);b.cierra=[...document.querySelectorAll('.cz:checked')].map(x=>x.value).join(',');try{await J('/admin/ajustes',b);try{localStorage['h_'+N]='1'}catch(e){};toast('Cambios guardados');pasos()}catch(e){toast(e.message)}}
 let NCH=null;
 const h12=h=>{const H=+h.slice(0,2);return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
@@ -111,9 +113,10 @@ try{localStorage['c_'+N]='1'}catch(e){}
 if(navigator.share){try{await navigator.share({title:NEG,text:t,url:u})}catch(e){}}else{try{await navigator.clipboard.writeText(t+' '+u);toast('Enlace copiado. Pégalo en WhatsApp o tus redes.')}catch(e){toast(u)}}if(DUENO)pasos()}
 // ---- primeros pasos
 async function pasos(){const el=$('#pasos');if(!el||!DUENO)return;let oc=false;try{oc=localStorage['p_'+N]==='0'}catch(e){}if(oc){el.innerHTML='';return}
-let i,a,eq,cl;try{[i,a,eq,cl]=await Promise.all([J('/info'),J('/admin/ajustes'),J('/admin/equipo'),J('/admin/clientes')])}catch(e){return}
+let i,a,eq,cl,tr;try{[i,a,eq,cl,tr]=await Promise.all([J('/info'),J('/admin/ajustes'),J('/admin/equipo'),J('/admin/clientes'),J('/admin/trabajos')])}catch(e){return}
 const fl=k=>{try{return localStorage[k+N]==='1'}catch(e){return false}};
 const P=[['Sube la portada de tu página',!!(i.portada||i.fotos),"ve('pagina','#fotos')",'Subir'],
+['Sube fotos de tus cortes',tr.length>0,"ve('ajustes','#trab')",'Subir'],
 ['Revisa tu horario y días de descanso',!!a.cierra||fl('h_'),"ve('ajustes','#aj')",'Revisar'],
 ['Pon tu correo para recibir avisos de citas',!!(a.correo||a.avisos),"ve('ajustes','#aj')",'Poner'],
 ['Invita a tus barberos',eq.length>1,"ve('ajustes','#equipo')",'Invitar'],
@@ -252,13 +255,28 @@ async function guardaCom(k){try{await P('/admin/comision',{barbero:FD.barberos[k
 async function pagaCom(k,monto){const b=FD.barberos[k].barbero;if(!confirm(`¿Registrar el pago de ${mx(monto)} a ${b}?`))return;
 try{await P('/admin/movimiento',{tipo:'gasto',categoria:'Sueldos y comisiones',monto,concepto:'Comisión '+b,barbero:b,fecha:FM===hoy().slice(0,7)?hoy():FM+'-28'});toast('Pago registrado');finanzas()}catch(e){toast(e.message)}}
 async function exportaFin(){try{const r=await fetch(`/api/${N}/admin/finanzas/export?mes=${FM}`);if(!r.ok)throw new Error('No se pudo descargar');const u=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=u;a.download=`finanzas-${FM}.csv`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);toast('Archivo descargado')}catch(e){toast(e.message)}}
+let TRB=[],TB_B='',TB_S='';
+async function achica(f,W,H){const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error('No se pudo leer la foto'));i.src=URL.createObjectURL(f)});
+let sw=im.naturalWidth,sh=im.naturalHeight,sx=0,sy=0;const ar=W/H;if(sw/sh>ar){sx=(sw-sh*ar)/2;sw=sh*ar}else{sy=(sh-sw/ar)/2;sh=sw/ar}
+const k=Math.min(1,W/sw),c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);c.getContext('2d').drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);URL.revokeObjectURL(im.src);
+let q=.86,d=c.toDataURL('image/jpeg',q);while(d.length>900000&&q>.4){q-=.1;d=c.toDataURL('image/jpeg',q)}return d}
+async function trabajos(){const el=$('#trab');if(!el)return;let L,E;try{[L,E]=await Promise.all([J('/admin/trabajos'),J('/estilos')])}catch(e){return}TRB=L;
+el.innerHTML=`<div class="panel"><div class="acc">${DUENO?`<div style="flex:1;min-width:130px"><label for="tb-b">¿Quién lo hizo?</label><select id="tb-b"><option value="">Sin especificar</option>${opt(BARS)}</select></div>`:''}<div style="flex:1;min-width:130px"><label for="tb-s">¿Qué corte es?</label><select id="tb-s"><option value="">Sin especificar</option>${E.map(e=>`<option value="${Number(e.id)}">${esc(e.nombre)}</option>`).join('')}</select></div></div>
+<label class="btn subir">Subir fotos<input type="file" accept="image/*" multiple hidden id="tb-f"></label><p id="tb-p" style="font-size:14px;margin:10px 0 0">Puedes elegir varias a la vez. Se recortan y aligeran solas.</p></div>
+${L.length?`<p style="margin:14px 0 0">${L.length} foto${L.length===1?'':'s'}. Toca una para verla.</p><div class="tgrid">${L.map((t,k)=>`<div class="tcel" data-k="${k}" style="background-image:url(/i/${Number(t.img)})"><button type="button" aria-label="Borrar foto" data-del="${Number(t.id)}">×</button><span>${esc([t.servicio,DUENO&&t.barbero].filter(Boolean).join(' · '))}</span></div>`).join('')}</div>`:'<div class="vacio" style="margin-top:12px">Aún no hay fotos. Sube tus mejores cortes: ayudan mucho a que el cliente se decida.</div>'}`;
+if($('#tb-b')){$('#tb-b').value=TB_B;$('#tb-b').onchange=e=>TB_B=e.target.value}$('#tb-s').value=TB_S;$('#tb-s').onchange=e=>TB_S=e.target.value;$('#tb-f').onchange=subeTrab;
+el.querySelectorAll('.tcel').forEach(c=>c.onclick=e=>{if(e.target.dataset.del)return;galeria(TRB.map(capTrab),+c.dataset.k)});
+el.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar esta foto?'))return;try{await P('/admin/trabajo/borrar',{id:+b.dataset.del});toast('Foto borrada');trabajos()}catch(e){toast(e.message)}})}
+async function subeTrab(e){const fs=[...e.target.files].filter(f=>/^image\//.test(f.type)).slice(0,20);e.target.value='';if(!fs.length)return;let ok=0;
+for(const [k,f] of fs.entries()){$('#tb-p').textContent=`Subiendo ${k+1} de ${fs.length}…`;try{await P('/admin/trabajo',{data:await achica(f,1080,1350),barbero:DUENO?TB_B:'',servicio_id:TB_S});ok++}catch(x){toast(x.message)}}
+toast(ok?`Listo: ${ok} foto${ok===1?'':'s'} subida${ok===1?'':'s'}`:'No se subió ninguna foto');trabajos();if(DUENO)pasos()}
 $('#salir').onclick=async e=>{e.preventDefault();try{await P('/admin/salir',{})}catch(x){}location.replace('/'+N+'/entrar')};
 $('#fin-f').value=hoy();document.querySelectorAll('#fin-seg button').forEach(b=>b.onclick=()=>{FC='';forma(b.dataset.t)});
 $('#fin-ant').onclick=()=>{FM=cMes(FM,-1);finanzas()};$('#fin-sig').onclick=()=>{FM=cMes(FM,1);finanzas()};
 {const l=document.createElement('link');l.rel='manifest';l.href='/'+N+'/panel.json';document.head.append(l)}
 (async()=>{try{ME=await J('/admin/me')}catch(e){return}DUENO=ME.rol==='dueno';$('#logo').textContent=ME.negocio||'ADMIN';document.title='Panel · '+(ME.negocio||'');$('#salir').textContent='Salir · '+(ME.nombre||'').split(' ')[0];
 if(!DUENO){document.querySelectorAll('.solo-dueno,#tabs [data-t=clientes],#tabs [data-t=resumen],#tabs [data-t=pagina],#tabs [data-t=finanzas]').forEach(x=>x.hidden=true);if(['clientes','resumen','pagina','finanzas'].includes(TAB))tab('hoy');miPerfil();
-const [i,e]=await Promise.all([J('/info'),J('/estilos')]);BARS=[ME.barbero];SERV=e.map(x=>x.nombre);NEG=i.nombre;HI=+i.hora_ini;HF=+i.hora_fin;forms();bloqueos()}
+const [i,e]=await Promise.all([J('/info'),J('/estilos')]);BARS=[ME.barbero];SERV=e.map(x=>x.nombre);NEG=i.nombre;HI=+i.hora_ini;HF=+i.hora_fin;forms();bloqueos();trabajos()}
 else{catalogo();periodo();insights();clientes();fotos();cuentasCl();ajustes().then(()=>{equipo();perfiles()}).catch(e=>toast(e.message));textos();eventos();preguntas();finanzas().then(()=>{$('#fin-b').innerHTML=opt(BARS)})}
 miCuenta();cargar();pasos()})();
 </script></body></html>
