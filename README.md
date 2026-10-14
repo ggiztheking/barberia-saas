@@ -38,6 +38,16 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 | `RESEND_URL` | No | URL alterna de la API de Resend |
 | `MAKE_WEBHOOK_URL` | No | Webhook de Make para avisos de citas nuevas/canceladas |
 
+## Cobro de suscripciones
+
+`billing.js` cobra los planes Básico y Pro con Stripe (tarjeta) y Mercado Pago. El dueño contrata, ve su estado y cancela en la pestaña **Plan** del panel.
+
+- Los webhooks son la única fuente de verdad: `POST /webhooks/stripe` (firma `Stripe-Signature`) y `POST /webhooks/mercadopago` (firma `x-signature`). Configura ambos en el panel de cada proveedor.
+- Cada cobro aprobado suma 30 días al vencimiento, igual que `pagar_basico`/`pagar_pro` en `/super`. Cada evento se procesa una sola vez (tabla `pagos_eventos`), aunque el proveedor lo reenvíe.
+- Un pago fallido o una cancelación no quitan el acceso: el negocio queda vigente hasta su `vence` y después `vigente()` bloquea las reservas.
+- Stripe: crea un precio recurrente mensual por plan y pon su id en `STRIPE_PRICE_*`. Mercado Pago: la suscripción (`preapproval`) se crea con `PRECIO_*`. Eventos de Mercado Pago atendidos: `subscription_authorized_payment` (acredita) y `subscription_preapproval` (estado).
+- Antes de cobrar de verdad, prueba cada proveedor en su modo de pruebas.
+
 ## App instalable (PWA)
 
 Cada barbería se puede instalar como app desde su página (`/<slug>`): botón "Instalar app" en Android/Chrome, o Compartir → Añadir a pantalla de inicio en iPhone. El manifest (`/<slug>/manifest.json`) usa el nombre del negocio y `public/sw.js` muestra `offline.html` sin internet; las citas nunca se guardan en caché.

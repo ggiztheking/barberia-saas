@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
-<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
+<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="plan">Plan</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
 <div id="plan"></div>
 <section data-tab="hoy"><div id="pasos"></div><div class="acc" style="margin-bottom:6px"><button class="alt" onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button class="alt" onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
 <h2 id="tit" style="margin-top:22px">Agenda del día</h2><div id="lista"></div>
@@ -33,6 +33,7 @@
 <h2 style="margin-top:34px">Perfiles del equipo</h2><p>Especialidad, una frase y su Instagram. En tu página cada uno tiene su botón "Agendar con…".</p><div id="perfiles"></div>
 <h2 style="margin-top:34px">Eventos</h2><p>Lanzamientos, días de promoción o fiestas. Tus clientes se apuntan desde tu página y aquí ves quién va.</p><div id="eventos"></div>
 <h2 style="margin-top:34px">Preguntas frecuentes</h2><p>Aparecen en tu página y ayudan a que Google te muestre mejor.</p><div id="preguntas"></div></section>
+<section data-tab="plan" hidden><h2>Tu plan</h2><p>Aquí ves el estado de tu suscripción y puedes pagar o cancelar. Tu prueba gratis no se pierde al contratar.</p><div id="plan-ui"></div></section>
 <section data-tab="ajustes" hidden><div id="miperfil" hidden><h2>Mi perfil</h2><p>Así te ven los clientes en la página de la barbería.</p><div class="panel" id="mp"></div></div><div class="solo-dueno"><h2>Mi barbería</h2><div id="aj"></div>
 <h2 style="margin-top:34px">Equipo</h2><p>Cada persona entra con su propio correo y contraseña. Los barberos solo ven y manejan sus propias citas.</p><div id="equipo"></div></div>
 <h2 style="margin-top:34px">Galería de trabajos</h2><p>Fotos de cortes que han hecho. Tus clientes las ven al elegir el corte o el barbero, y en tu página.</p><div id="trab"></div>
@@ -71,7 +72,7 @@ async function precio(t,id){const v=$(`#p-${t}-${id}`).value;if(v==='')return;aw
 async function agrega(t){try{await J('/admin/item',{tabla:t,nombre:$('#n-'+t).value,tipo:t==='estilos'?$('#t-estilos').value:undefined,precio:Number($('#v-'+t).value)},'POST');catalogo()}catch(e){toast(e.message)}}
 async function borra(t,id){if(!confirm('¿Quitar este elemento?'))return;await J('/admin/borrar',{tabla:t,id},'POST');catalogo()}
 function banner(a){const d=a.vence?Math.ceil((new Date(a.vence)-Date.now())/864e5):null,P={prueba:'Prueba gratis',basico:'Plan Básico',pro:'Plan Pro'}[a.plan]||a.plan;
-if(a.abierto&&a.plan!=='prueba'&&(d===null||d>7)){$('#plan').innerHTML='';return}$('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18px"><b>${esc(P)}</b> · ${!a.abierto?'Tu cuenta está vencida o suspendida y tus clientes no pueden agendar. Contáctanos para reactivarla.':d===null?'sin vencimiento':d+' días restantes'}</div>`}
+if(a.abierto&&a.plan!=='prueba'&&(d===null||d>7)){$('#plan').innerHTML='';return}$('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18px"><b>${esc(P)}</b> · ${!a.abierto?'Tu cuenta está vencida o suspendida y tus clientes no pueden agendar.':d===null?'sin vencimiento':d+' días restantes'} · <a href="#" style="color:var(--gold)" onclick="tab('plan');return false">Ver planes</a></div>`}
 const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['correo','Correo para avisos de citas'],['avisos','WhatsApp para avisos de citas (si es distinto)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
 let BARS=[],SERV=[],NEG='',HI=10,HF=19,CL=[],FIL='todos';
 const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],opt=l=>l.map(x=>`<option>${esc(x)}</option>`).join(''),kp=(b,t)=>`<div class="kpi"><b>${b}</b><span>${t}</span></div>`;
@@ -151,8 +152,21 @@ $('#ins').innerHTML=(r.sinCerrar?`<div class="msg" style="margin-bottom:16px">Ti
 <h3>Horas con más citas</h3>${barras(H.map(h=>[h.hora,h.n]),n=>n+' citas')}<div class="ejes"><span>${H.length?H[0].hora:''}</span><span>${H.length?H[H.length-1].hora:''}</span></div>
 <h3>Clientes</h3>${hb([['Recurrentes',r.clientes.recurrentes,r.clientes.recurrentes+' clientes'],['Nuevos',nu,nu+' clientes']])}`}
 let TAB=sessionStorage['t_'+N]||'hoy';
-function tab(t){TAB=t;try{sessionStorage['t_'+N]=t}catch(e){}document.querySelectorAll('[data-tab]').forEach(s=>s.hidden=s.dataset.tab!==t);document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));scrollTo({top:0})}
-document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));tab(TAB);
+function tab(t){TAB=t;try{sessionStorage['t_'+N]=t}catch(e){}document.querySelectorAll('[data-tab]').forEach(s=>s.hidden=s.dataset.tab!==t);document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));scrollTo({top:0});if(t==='plan')planUI()}
+const PLANTXT={prueba:'Prueba gratis',basico:'Plan Básico',pro:'Plan Pro'},ESTSUB={activa:'Suscripción activa',pago_fallido:'No pudimos cobrar tu último pago',pausada:'Suscripción en pausa',cancelada:'Suscripción cancelada'};
+async function planUI(){const el=$('#plan-ui');let a;try{a=await J('/admin/plan')}catch(e){el.innerHTML=`<div class="msg">${esc(e.message)}</div>`;return}
+const d=a.vence?Math.ceil((new Date(a.vence)-Date.now())/864e5):null,s=a.suscripcion,viva=s&&['activa','pago_fallido','pausada'].includes(s.estado);
+let h=`<div class="panel"><div class="kpi"><b>${esc(PLANTXT[a.plan]||a.plan)}</b><span>${!a.abierto?'Vencido o suspendido: tus clientes no pueden agendar':d===null?'Sin vencimiento':'Vence el '+new Date(a.vence).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})+' · '+(d>0?d+' días restantes':'hoy')}</span></div>${s?`<p>${esc(ESTSUB[s.estado]||s.estado)} · ${s.proveedor==='stripe'?'Tarjeta (Stripe)':'Mercado Pago'}</p>`:''}</div>`;
+h+=viva?`<button class="alt" onclick="planCancelar()">Cancelar suscripción</button><p>Conservas el acceso hasta la fecha de vencimiento. Para cambiar de plan, cancela y contrata el nuevo.</p>`
+:a.planes.map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p><b>${p.precio?'$'+p.precio+' MXN / mes':'Precio por definir'}</b></p><p>${p.id==='pro'?'Hasta 8 barberos.':'Hasta 3 barberos.'}</p>${p.stripe||p.mercadopago?`<div class="acc">${p.stripe?`<button onclick="planPagar('${p.id}','stripe')">Pagar con tarjeta</button>`:''}${p.mercadopago?`<button class="alt" onclick="planPagar('${p.id}','mercadopago')">Pagar con Mercado Pago</button>`:''}</div>`:'<p>Los pagos en línea aún no están disponibles. Escríbenos y activamos tu plan.</p>'}</div>`).join('');
+el.innerHTML=h;return a}
+async function planPagar(plan,proveedor){try{const r=await P('/admin/plan/checkout',{plan,proveedor});if(!/^https:\/\//.test(r.url))throw new Error('Respuesta de pago no válida');location.href=r.url}catch(e){toast(e.message)}}
+async function planCancelar(){if(!confirm('¿Cancelar tu suscripción? Conservas el acceso hasta que venza tu plan.'))return;try{await P('/admin/plan/cancelar',{});toast('Suscripción cancelada');planUI();ajustes()}catch(e){toast(e.message)}}
+// Al volver del pago, los webhooks pueden tardar unos segundos en activar el plan.
+async function planVuelta(){const ok=/[?&]pago=ok/.test(location.search);history.replaceState(null,'',location.pathname);tab('plan');if(!ok)return;$('#plan-ui').innerHTML='<div class="msg ok">Confirmando tu pago…</div>';
+for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,3000));const a=await planUI();if(a&&a.suscripcion&&a.suscripcion.estado==='activa'&&a.plan!=='prueba'){ajustes();toast('¡Listo! Tu plan está activo');return}if(!a)return;$('#plan-ui').insertAdjacentHTML('afterbegin','<div class="msg ok">Confirmando tu pago…</div>')}
+$('#plan-ui').insertAdjacentHTML('afterbegin','<div class="msg">Tu pago sigue en proceso. Puede tardar unos minutos en reflejarse.</div>')}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));tab(TAB);if(/[?&]pago=/.test(location.search))planVuelta();
 $('#ex-h').value=hoy();$('#ex-d').value=hoy().slice(0,8)+'01';
 async function exporta(){const d=$('#ex-d').value,h=$('#ex-h').value;if(!d||!h||d>h)return toast('Revisa las fechas');
 try{const r=await fetch(`/api/${N}/admin/export?desde=${d}&hasta=${h}`);if(!r.ok)throw new Error('No se pudo descargar');
@@ -275,7 +289,7 @@ $('#fin-f').value=hoy();document.querySelectorAll('#fin-seg button').forEach(b=>
 $('#fin-ant').onclick=()=>{FM=cMes(FM,-1);finanzas()};$('#fin-sig').onclick=()=>{FM=cMes(FM,1);finanzas()};
 {const l=document.createElement('link');l.rel='manifest';l.href='/'+N+'/panel.json';document.head.append(l)}
 (async()=>{try{ME=await J('/admin/me')}catch(e){return}DUENO=ME.rol==='dueno';$('#logo').textContent=ME.negocio||'ADMIN';document.title='Panel · '+(ME.negocio||'');$('#salir').textContent='Salir · '+(ME.nombre||'').split(' ')[0];
-if(!DUENO){document.querySelectorAll('.solo-dueno,#tabs [data-t=clientes],#tabs [data-t=resumen],#tabs [data-t=pagina],#tabs [data-t=finanzas]').forEach(x=>x.hidden=true);if(['clientes','resumen','pagina','finanzas'].includes(TAB))tab('hoy');miPerfil();
+if(!DUENO){document.querySelectorAll('.solo-dueno,#tabs [data-t=clientes],#tabs [data-t=resumen],#tabs [data-t=pagina],#tabs [data-t=finanzas],#tabs [data-t=plan]').forEach(x=>x.hidden=true);if(['clientes','resumen','pagina','finanzas','plan'].includes(TAB))tab('hoy');miPerfil();
 const [i,e]=await Promise.all([J('/info'),J('/estilos')]);BARS=[ME.barbero];SERV=e.map(x=>x.nombre);NEG=i.nombre;HI=+i.hora_ini;HF=+i.hora_fin;forms();bloqueos();trabajos()}
 else{catalogo();periodo();insights();clientes();fotos();cuentasCl();ajustes().then(()=>{equipo();perfiles()}).catch(e=>toast(e.message));textos();eventos();preguntas();finanzas().then(()=>{$('#fin-b').innerHTML=opt(BARS)})}
 miCuenta();cargar();pasos()})();

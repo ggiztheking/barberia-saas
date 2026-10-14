@@ -1,7 +1,7 @@
 const express = require('express'), { Pool } = require('pg'), crypto = require('crypto');
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb', verify: (q, s, buf) => { if (q.url.startsWith('/webhooks/')) q.raw = buf; } })); // los webhooks de pago se firman sobre el cuerpo crudo
 app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN', 'Strict-Transport-Security': 'max-age=15552000', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' }); n(); });
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
@@ -197,7 +197,7 @@ app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
   await pool.query(`UPDATE negocios SET ${A} WHERE id=$1`, [q.params.id]);
   s.json({ ok: true });
 }));
-const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt'];
+const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks'];
 app.post('/api/registro', wrap(async (q, s) => {
   if (limita('r' + q.ip, 5, 3600e3)) return s.status(429).json({ error: 'Demasiados registros. Intenta más tarde.' });
   const nombre = String(q.body.nombre || '').trim().slice(0, 60), slug = String(q.body.slug || '').toLowerCase(), pw = String(q.body.password || '');
@@ -443,6 +443,7 @@ api.get('/admin/finanzas/export', auth, wrap(async (q, s) => {
 }));
 
 require('./crm')(app, api, { pool, auth, wrap, HOY, bars, tel10, limita });
+require('./billing')(app, api, { pool, auth, wrap, limita, vigente });
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
 api.post('/cliente/registro', wrap(async (q, s) => {
