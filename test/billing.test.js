@@ -11,6 +11,8 @@ const WH_STRIPE = 'whsec_de_prueba', WH_MP = 'mp_secreto_de_prueba', SUPER = 'su
 const sufijo = Date.now().toString(36);
 let srv, base, stripe, mp;
 const stripeVisto = [], mpVisto = [];
+// Ids únicos por corrida: la base de desarrollo persiste y los eventos ya procesados no se repiten.
+const MP_OK = String(Date.now()) + '1', MP_NO = String(Date.now()) + '2', MP_PRE = 'pre_' + sufijo;
 
 // Servidor falso: guarda lo que recibe y responde con lo que dicte `resp(metodo, url, cuerpo)`.
 const falso = (visto, resp) => new Promise(ok => {
@@ -27,9 +29,9 @@ before(async () => {
   stripe = await falso(stripeVisto, (m, u) => (u === '/v1/checkout/sessions' ? [200, { url: 'https://checkout.stripe.test/sesion' }] : [200, {}]));
   mp = await falso(mpVisto, (m, u) => {
     if (m === 'POST' && u === '/preapproval') return [200, { init_point: 'https://mercadopago.test/suscribir' }];
-    if (u === '/authorized_payments/555') return [200, { preapproval_id: 'pre_1', payment: { status: 'approved' } }];
-    if (u === '/authorized_payments/556') return [200, { preapproval_id: 'pre_1', payment: { status: 'rejected' } }];
-    if (u === '/preapproval/pre_1') return [200, { status: 'authorized', external_reference: `${mp.negId}:pro`, payer_id: 77 }];
+    if (u === '/authorized_payments/' + MP_OK) return [200, { preapproval_id: MP_PRE, payment: { status: 'approved' } }];
+    if (u === '/authorized_payments/' + MP_NO) return [200, { preapproval_id: MP_PRE, payment: { status: 'rejected' } }];
+    if (u === '/preapproval/' + MP_PRE) return [200, { status: 'authorized', external_reference: `${mp.negId}:pro`, payer_id: 77 }];
     return [404, {}];
   });
   ({ base, parar: srv } = await arranca({ SUPER_PASS: SUPER, STRIPE_SECRET_KEY: 'sk_test_falsa', STRIPE_PRICE_BASICO: 'price_basico', STRIPE_PRICE_PRO: 'price_pro', STRIPE_WEBHOOK_SECRET: WH_STRIPE,
@@ -121,23 +123,23 @@ test('Mercado Pago: checkout, firma, cobro aprobado, repetición y rechazado', {
     return fetch(`${base}/webhooks/mercadopago?data.id=${id}&type=subscription_authorized_payment`, { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-signature': `ts=${ts},v1=${v1}`, 'x-request-id': rid }, body: JSON.stringify({ type: 'subscription_authorized_payment', data: { id } }) });
   };
-  assert.equal((await notifica('555', 'otro-secreto')).status, 400);
-  assert.equal((await fetch(`${base}/webhooks/mercadopago?data.id=555`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+  assert.equal((await notifica(MP_OK, 'otro-secreto')).status, 400);
+  assert.equal((await fetch(`${base}/webhooks/mercadopago?data.id=${MP_OK}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
 
-  assert.equal((await (await notifica('556')).json()).resultado, 'sin_aprobar');
+  assert.equal((await (await notifica(MP_NO)).json()).resultado, 'sin_aprobar');
   assert.equal((await plan(slug, cookie)).plan, 'prueba', 'un pago rechazado no activa nada');
 
-  assert.equal((await (await notifica('555')).json()).resultado, 'ok');
+  assert.equal((await (await notifica(MP_OK)).json()).resultado, 'ok');
   const a = await plan(slug, cookie), v1 = new Date(a.vence).getTime();
   assert.equal(a.plan, 'pro');
   assert.equal(a.suscripcion.proveedor, 'mercadopago');
   assert.ok(v1 > Date.now() + 40 * DIA);
 
-  assert.equal((await (await notifica('555')).json()).resultado, 'repetido');
+  assert.equal((await (await notifica(MP_OK)).json()).resultado, 'repetido');
   assert.equal(new Date((await plan(slug, cookie)).vence).getTime(), v1);
 
   assert.equal((await post(slug, cookie, 'cancelar')).status, 200);
-  assert.equal(mpVisto.at(-1).metodo + ' ' + mpVisto.at(-1).url, 'PUT /preapproval/pre_1');
+  assert.equal(mpVisto.at(-1).metodo + ' ' + mpVisto.at(-1).url, 'PUT /preapproval/' + MP_PRE);
   assert.equal((await plan(slug, cookie)).suscripcion.estado, 'cancelada');
 });
 
