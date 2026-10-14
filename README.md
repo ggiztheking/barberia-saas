@@ -17,6 +17,10 @@ npm start
 
 Abre http://localhost:3000. Las tablas y el negocio inicial `onyx` se crean solos al arrancar.
 
+## Pruebas
+
+`npm run check` revisa la sintaxis y `npm test` arranca el servidor real y prueba registro, páginas públicas y paneles. Necesita `DATABASE_URL` (sin ella las pruebas se omiten); en CI GitHub levanta un PostgreSQL de servicio. Usa una base de desarrollo, nunca la de producción.
+
 ## Variables de entorno
 
 Ver [`.env.example`](.env.example) para la lista completa con descripciones.
