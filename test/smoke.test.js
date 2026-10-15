@@ -53,6 +53,19 @@ test('el panel de admin exige sesión', { skip: sinBase }, async () => {
   assert.equal((await fetch(`${BASE}/api/${slug}/admin/finanzas`)).status, 401);
 });
 
+test('el negocio principal es estilo-internacional y /onyx redirige', { skip: sinBase }, async () => {
+  assert.equal((await fetch(BASE + '/estilo-internacional')).status, 200);
+  const sinSeguir = ruta => fetch(BASE + ruta, { redirect: 'manual' });
+  const a = await sinSeguir('/onyx/agenda?x=1');
+  assert.equal(a.status, 301);
+  assert.equal(a.headers.get('location'), '/estilo-internacional/agenda?x=1');
+  const b = await sinSeguir('/api/onyx/info');
+  assert.equal(b.status, 308);
+  assert.equal(b.headers.get('location'), '/api/estilo-internacional/info');
+  assert.equal((await fetch(BASE + '/onyxia')).status, 404, 'solo redirige /onyx exacto');
+  assert.equal((await registra({ nombre: 'X', slug: 'onyx', dueno: 'D', email: 'd@ejemplo.com', password: 'clave-segura-123' })).status, 400, 'onyx quedó reservado');
+});
+
 test('el panel /super rechaza sin contraseña y acepta con ella', { skip: sinBase }, async () => {
   assert.equal((await fetch(BASE + '/api/super/negocios')).status, 401);
   const ok = await fetch(BASE + '/api/super/negocios', { headers: { 'x-super': 'super-de-prueba' } });

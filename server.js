@@ -16,6 +16,7 @@ app.get('/i/:id', async (q, s) => {
   } catch (e) { s.sendStatus(500); }
 });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const PRINCIPAL = 'estilo-internacional'; // negocio inicial y ejemplo de la landing
 const HOY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Merida' });
 const wrap = f => (q, s) => f(q, s).catch(e => { console.error(e); s.status(500).json({ error: 'Error del servidor' }); });
 const hits = new Map();
@@ -138,20 +139,23 @@ const seed = async id => {
   await pool.query('CREATE TABLE IF NOT EXISTS fijos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, concepto TEXT NOT NULL, categoria TEXT NOT NULL, monto NUMERIC(12,2) NOT NULL, dia INT DEFAULT 1)');
   for (const r of (await pool.query('SELECT id FROM negocios n WHERE NOT EXISTS (SELECT 1 FROM preguntas p WHERE p.negocio_id=n.id)')).rows) await seedPreg(r.id);
   await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
-  let o = (await pool.query("SELECT id FROM negocios WHERE slug='onyx'")).rows[0];
+  // Onyx ya no existe: el negocio principal es Estilo Internacional. Si quedó guardado como 'onyx', se renombra (las rutas viejas redirigen).
+  await pool.query("UPDATE negocios SET slug=$1 WHERE slug='onyx' AND NOT EXISTS (SELECT 1 FROM negocios WHERE slug=$1)", [PRINCIPAL]);
+  let o = (await pool.query('SELECT id FROM negocios WHERE slug=$1', [PRINCIPAL])).rows[0];
   if (!o) {
     const salt = crypto.randomBytes(8).toString('hex');
-    o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('onyx','Estilo Internacional','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.app.goo.gl/NpfSt23Eorm4wgd37',$1,true,$2,$3) RETURNING id",
+    o = (await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,direccion,maps,barberos,fotos,salt,hash) VALUES('estilo-internacional','Estilo Internacional','529623295413','Fracc. Los Héroes, Mérida, Yucatán','https://maps.app.goo.gl/NpfSt23Eorm4wgd37',$1,true,$2,$3) RETURNING id",
       [process.env.BARBEROS || 'Pedro,GGTHEBARBER', salt, hashPass(process.env.ADMIN_PASS || crypto.randomBytes(9).toString('hex'), salt)])).rows[0];
   }
-  await pool.query("UPDATE negocios SET plan='pro' WHERE slug='onyx' AND plan='prueba'");
-  await pool.query("UPDATE negocios SET nombre='Estilo Internacional' WHERE slug='onyx' AND nombre='Onyx Barbería'");
+  await pool.query("UPDATE negocios SET plan='pro' WHERE slug=$1 AND plan='prueba'", [PRINCIPAL]);
+  await pool.query("UPDATE negocios SET nombre='Estilo Internacional' WHERE slug=$1 AND nombre='Onyx Barbería'", [PRINCIPAL]);
   await pool.query('CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT)');
-  if (process.env.CORREO_ONYX) {
+  const correoPrincipal = process.env.CORREO_PRINCIPAL || process.env.CORREO_ONYX; // CORREO_ONYX sigue valiendo para no romper la configuración existente
+  if (correoPrincipal) {
     const c = (await pool.query("SELECT v FROM config WHERE k='correo_onyx'")).rows[0];
-    if (!c || c.v !== process.env.CORREO_ONYX) {
-      await pool.query("UPDATE negocios SET correo=$1 WHERE slug='onyx'", [process.env.CORREO_ONYX]);
-      await pool.query("INSERT INTO config(k,v) VALUES('correo_onyx',$1) ON CONFLICT (k) DO UPDATE SET v=$1", [process.env.CORREO_ONYX]);
+    if (!c || c.v !== correoPrincipal) {
+      await pool.query('UPDATE negocios SET correo=$1 WHERE slug=$2', [correoPrincipal, PRINCIPAL]);
+      await pool.query("INSERT INTO config(k,v) VALUES('correo_onyx',$1) ON CONFLICT (k) DO UPDATE SET v=$1", [correoPrincipal]);
     }
   }
   for (const t of ['citas', 'estilos', 'productos']) await pool.query(`UPDATE ${t} SET negocio_id=$1 WHERE negocio_id IS NULL`, [o.id]);
@@ -197,7 +201,7 @@ app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
   await pool.query(`UPDATE negocios SET ${A} WHERE id=$1`, [q.params.id]);
   s.json({ ok: true });
 }));
-const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks'];
+const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks', 'onyx'];
 app.post('/api/registro', wrap(async (q, s) => {
   if (limita('r' + q.ip, 5, 3600e3)) return s.status(429).json({ error: 'Demasiados registros. Intenta más tarde.' });
   const nombre = String(q.body.nombre || '').trim().slice(0, 60), slug = String(q.body.slug || '').toLowerCase(), pw = String(q.body.password || '');
@@ -215,6 +219,9 @@ app.post('/api/registro', wrap(async (q, s) => {
   } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese enlace ya está en uso. Prueba otro.' }); throw x; }
 }));
 
+// Enlaces, QR y apps instaladas de cuando el negocio se llamaba 'onyx' siguen funcionando (308 conserva el método de las peticiones).
+app.use('/api/onyx', (q, s) => s.redirect(308, '/api/' + PRINCIPAL + q.url));
+app.use((q, s, n) => (/^\/onyx(\/|$|\?)/.test(q.url) ? s.redirect(301, q.originalUrl.replace(/^\/onyx/, '/' + PRINCIPAL)) : n()));
 const api = express.Router({ mergeParams: true });
 app.use('/api/:slug', async (q, s, n) => {
   try {
@@ -708,8 +715,8 @@ const page = f => (q, s) => s.sendFile(f, { root: __dirname + '/public' });
 app.get('/', page('saas.html'));
 app.get('/registro', page('registro.html'));
 app.get('/super', page('app-super.html'));
-app.get('/agenda.html', (q, s) => s.redirect(301, '/onyx/agenda'));
-app.get('/admin.html', (q, s) => s.redirect(301, '/onyx/admin'));
+app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));
+app.get('/admin.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/admin'));
 app.get('/sitemap.xml', wrap(async (q, s) => {
   const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
   s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', ...r.map(x => '/' + encodeURIComponent(x.slug))].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');

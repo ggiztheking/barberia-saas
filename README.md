@@ -15,7 +15,7 @@ export $(grep -v '^#' .env | xargs)   # el servidor lee process.env; no carga .e
 npm start
 ```
 
-Abre http://localhost:3000. Las tablas y el negocio inicial `onyx` se crean solos al arrancar.
+Abre http://localhost:3000. Las tablas y el negocio inicial `estilo-internacional` se crean solos al arrancar. Si la base todavía lo tiene como `onyx` (su nombre anterior), se renombra solo y `/onyx/...` redirige al enlace nuevo.
 
 ## Pruebas
 
@@ -29,9 +29,9 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 |---|---|---|
 | `DATABASE_URL` | Sí | Conexión a PostgreSQL |
 | `PORT` | No | Puerto (Railway lo define; por defecto 3000) |
-| `ADMIN_PASS` | No | Contraseña inicial del admin de `onyx` (si falta, se genera una aleatoria) |
-| `BARBEROS` | No | Barberos iniciales de `onyx`, separados por coma |
-| `CORREO_ONYX` | No | Correo de avisos de `onyx` |
+| `ADMIN_PASS` | No | Contraseña inicial del admin de `estilo-internacional` (si falta, se genera una aleatoria) |
+| `BARBEROS` | No | Barberos iniciales de `estilo-internacional`, separados por coma |
+| `CORREO_PRINCIPAL` | No | Correo de avisos de `estilo-internacional` (`CORREO_ONYX` sigue valiendo) |
 | `SUPER_PASS` | Para `/super` | Contraseña del panel del dueño |
 | `RESEND_API_KEY` | No | Avisos de citas por correo |
 | `MAIL_FROM` | No | Remitente de los correos |
