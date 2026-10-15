@@ -530,7 +530,7 @@ api.post('/admin/imagen/borrar', auth, wrap(async (q, s) => {
   await pool.query('DELETE FROM imagenes WHERE negocio_id=$1 AND tipo=$2 AND ref=$3', [q.neg.id, String(q.body.tipo), q.body.tipo === 'portada' ? '1' : String(q.body.ref || '')]);
   s.json({ ok: true });
 }));
-api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, cierra: n.cierra || '' }); }));
+api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, cierra: n.cierra || '', tema: n.tema || '' }); }));
 api.get('/pagina', wrap(async (q, s) => {
   const n = q.neg, id = n.id, Q = (sql, p = [id]) => pool.query(sql, p).then(r => r.rows);
   const [pf, ev, pr, pd] = await Promise.all([
@@ -554,7 +554,7 @@ api.post('/eventos/:id/asistir', wrap(async (q, s) => {
   catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ya estás apuntado a este evento' }); throw x; }
   s.json({ ok: true, van: e.van + 1 });
 }));
-api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img,COALESCE(c.n,0)::int AS pop FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text LEFT JOIN (SELECT split_part(servicio,'" + SEP_EXTRAS + "',1) AS servicio,COUNT(*) n FROM citas WHERE negocio_id=$1 AND fecha > CURRENT_DATE - 90 AND estado<>'cancelada' GROUP BY 1) c ON c.servicio=e.nombre WHERE e.negocio_id=$1 AND e.tipo<>'referencia' ORDER BY (e.tipo<>'paquete'), e.id", [q.neg.id])).rows)));
+api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img,COALESCE(c.n,0)::int AS pop FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text LEFT JOIN (SELECT split_part(servicio,'" + SEP_EXTRAS + "',1) AS servicio,COUNT(*) n FROM citas WHERE negocio_id=$1 AND fecha > CURRENT_DATE - 90 AND estado<>'cancelada' GROUP BY 1) c ON c.servicio=e.nombre WHERE e.negocio_id=$1 AND e.tipo<>'referencia' ORDER BY (e.tipo<>'paquete'), CASE WHEN e.tipo='paquete' THEN e.precio END, e.id", [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
   const { fecha, barbero } = q.query, n = q.neg;

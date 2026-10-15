@@ -1,0 +1,13 @@
+/* La agenda con el tema "Estilo Internacional" (claro): mismos colores y tipografías que la página pública. */
+:root { --bg: #f1efe9; --panel: #e4e3dc; --ink: #181a19; --dim: #676a64; --gold: #cc7232; --line: #d5d4cb; color-scheme: light; }
+body { font-family: 'DM Sans', system-ui, sans-serif; font-weight: 400; }
+h1, h2, h3, .logo, .barra div b { font-family: Manrope, system-ui, sans-serif; font-weight: 700; letter-spacing: -.04em; }
+.logo { letter-spacing: .12em; font-size: 20px; text-transform: uppercase; }
+button, .btn, .tag { font-family: 'DM Sans', system-ui, sans-serif; font-weight: 600; letter-spacing: .12em; border-radius: 2px; }
+.barra { background: rgba(241, 239, 233, .95); }
+/* Lo que en s.css lleva la tipografía serif y degradados oscuros fijos */
+.opt strong, .opt em, .card b, .av, .dia b, .atajo b, .fecha b { font-family: Manrope, system-ui, sans-serif; letter-spacing: -.03em; }
+.opt strong { font-size: 18px; font-weight: 700; }
+.dia b { font-weight: 700; }
+.atajo, .atajo:hover { background: var(--panel); }
+.atajo:hover { border-color: var(--ink); }

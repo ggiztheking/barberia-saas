@@ -27,7 +27,7 @@ test('Estilo Internacional trae sus 4 paquetes, 3 extras y 6 referencias sembrad
   assert.deepEqual(r.extras.map(e => [e.nombre, e.precio, e.lavado]), [['Cejas', 40, false], ['Lavado', 50, true], ['Masaje relajante de cuero cabelludo', 60, false]]);
   const est = await (await fetch(`${base}/api/estilo-internacional/estilos`)).json();
   assert.ok(est.every(e => e.tipo !== 'referencia'), 'las referencias no se pueden reservar');
-  assert.equal(est[0].tipo, 'paquete', 'los paquetes salen primero en la agenda');
+  assert.deepEqual(est.slice(0, 4).map(e => e.nombre), ['Elige tu corte', 'Corte Fresco', 'Corte y barba', 'VIP Diamante'], 'los paquetes salen primero en la agenda, del más barato al más caro');
   const unico = new Set(est.map(e => e.nombre));
   assert.equal(unico.size, est.length, 'sin nombres repetidos');
 });
