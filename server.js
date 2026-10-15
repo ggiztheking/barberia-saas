@@ -455,7 +455,7 @@ require('./billing')(app, api, { pool, auth, wrap, limita, vigente });
 const paq = require('./paquetes')(app, api, { pool, auth, wrap, listo, PRINCIPAL });
 require('./marketing')(app, api, { pool, auth, wrap, HOY, limita, listo });
 require('./contabilidad')(app, api, { pool, auth, wrap, HOY, limita, listo });
-require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10 });
+require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10, todas, cerrado, bars, ahoraH, vigente });
 require('./legal')(app, api, { pool, auth, wrap, HOY, limita, listo });
 const LISTO = Promise.all([listo, paq.listo]); // los arranques que fallan ya registran su error y no bloquean
 // ---- Cuentas de clientes
@@ -726,7 +726,7 @@ app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/admin'));
 app.get('/sitemap.xml', wrap(async (q, s) => {
   const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
-  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', ...r.map(x => '/' + encodeURIComponent(x.slug))].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
+  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
 }));
 const temaEI = require('./tema-ei');
 const paginaEI = async (q, n) => {

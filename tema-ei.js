@@ -93,7 +93,7 @@ ${estilos}${espacio}${trabajo}${acerca}${faq}
 <div class="address">${n.direccion ? `<p>${esc(n.direccion).replace(/,\s*/g, '<br>')}</p>` : ''}<p>HORARIO<br><strong>${esc(horario)}</strong>${cerrados.length ? `<br><small>Cerrado: ${esc(cerrados.join(', '))}</small>` : ''}</p></div>
 ${n.maps ? `<a class="button" rel="noopener noreferrer" target="_blank" href="${esc(n.maps)}">Cómo llegar · Google Maps ↗</a>` : ''}${tel}${ig}${n.estacionamiento ? `<p class="fine">Estacionamiento: ${esc(n.estacionamiento)}</p>` : ''}
 <p class="fine">Elige tu paquete, tu barbero y tu horario en la agenda. Tu cita queda apartada al confirmar.</p></div>${foto}</section></main>
-<footer><a class="brand" href="/${slug}"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}</span></a><span>${esc(n.lema || '')}</span><small>© ${new Date().getFullYear()} ${esc(n.nombre)}</small></footer>
+<footer><a class="brand" href="/${slug}"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}</span></a><span>${esc(n.lema || '')}</span><a href="/${slug}/privacidad">Aviso de privacidad</a><small>© ${new Date().getFullYear()} ${esc(n.nombre)}</small></footer>
 <a class="mobile-book button" href="#paquetes">Elige tu paquete y reserva ↗</a>
 <script>
 (function(){var $=function(s,r){return(r||document).querySelector(s)},$$=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};

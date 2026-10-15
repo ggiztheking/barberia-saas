@@ -57,6 +57,59 @@ La pestaña **Marketing** del panel (`marketing.js`) genera, con los datos reale
 - Cada pieza se puede copiar, **programar** como publicación (aparece en CRM → Contenido) o **enviar por WhatsApp** a un grupo del CRM como campaña (`{nombre}` lo llena el CRM por cliente).
 - Pendiente: probar con una clave real de Anthropic (las pruebas usan un servidor simulado) y que la IA lea también las reseñas y la competencia.
 
+## Contabilidad (para tu contador)
+
+- Está al final de la pestaña **Finanzas** del panel. Elige el mes con su propio selector. Cuando Finanzas se recarga (cambias de mes con las flechas, registras un gasto o una venta, pagas una comisión), la contabilidad se actualiza con el mismo mes.
+- **Estado de resultados:** ingresos por servicios (citas completadas) y otras ventas; comisiones por barbero; gastos de operación por categoría; utilidad de operación y margen. Todo se redondea a centavos.
+- **Comisiones:** se cuenta lo que le toca a cada barbero según su porcentaje actual. Si se le pagó más, cuenta lo pagado. Esos pagos no se restan dos veces como gasto.
+- **Inversión:** se muestra aparte y no afecta la utilidad.
+- **Comparativo** contra el mes anterior, en pesos y en porcentaje.
+- **Punto de equilibrio:** "necesitas X cortes al mes, unos Y por día de trabajo". Usa tus gastos fijos, el ticket promedio y la comisión promedio. Los días de trabajo descuentan los días que cierra la barbería.
+- **Proyección de cierre** del mes en curso, con el ritmo de los días de trabajo que ya pasaron. Los gastos fijos (ligados a un gasto fijo o de una categoría que tienes como gasto fijo) cuentan una sola vez; solo los gastos variables se proyectan.
+- **ISR estimado (RESICO persona física):** tabla mensual del art. 113-E de la LISR (1.00 % hasta $25,000; 1.10 % hasta $50,000; 1.50 % hasta $83,333.33; 2.00 % hasta $208,333.33; 2.50 % hasta $3,500,000). La tasa se aplica a todos los ingresos del mes. La ley usa lo efectivamente cobrado y facturado (CFDI) **sin IVA**. El reporte usa todo lo cobrado que registraste y además muestra la base y el ISR quitando el IVA (16 %), por si tus precios ya lo incluyen. También muestra lo acumulado en el año: el RESICO deja de aplicar a partir del mes siguiente a que los ingresos del año pasen de $3.5 millones. **Es una estimación orientativa y no sustituye a un contador. No calcula el IVA ni otros regímenes.**
+- **Descargar reporte:** archivo CSV que abre bien en Excel, con acentos (UTF-8 con BOM). Se llama `contabilidad-<tu-enlace>-<mes>.csv`.
+- API (solo el dueño): `GET /api/<slug>/admin/contabilidad/reporte?mes=AAAA-MM` y `GET /api/<slug>/admin/contabilidad/export?mes=AAAA-MM`.
+- Pruebas: `node --test test/contabilidad.test.js`.
+
+## Agenda llena (optimización de tiempo)
+
+- Pestaña **Agenda llena** del panel del dueño (`tiempo.js` + `public/admin-tiempo.js`).
+- **Huecos de los próximos 7 o 14 días**: por día y hora, cuántos barberos están libres y el % de ocupación. Usa la misma regla que la agenda del cliente (horario, días que no abre, descansos y citas), así que lo que aparece libre es exactamente lo que se puede reservar. Las horas que ya pasaron hoy no salen.
+- **Promo relámpago**: elige las horas vacías de un día y el descuento, y obtienes el texto listo para WhatsApp, estados o redes con el enlace a tu agenda (`PUBLIC_URL` o el dominio actual). Antes de armarla revisa que esas horas sigan libres. Se puede copiar, compartir por WhatsApp o mandar como campaña del CRM a un segmento (todos, frecuentes, VIP, en riesgo, etc.).
+- **Cómo se llena tu semana**: mapa de calor por día y hora de las últimas 4, 8 o 12 semanas (citas atendidas o en las que el cliente no llegó, entre la capacidad). Muestra el número en cada celda, así que se lee también sin color. Incluye las horas muertas y el % de faltas por día.
+- **Que no te dejen plantado**: clientes con 2 o más faltas en los últimos 90 días, citas de mañana de clientes que suelen faltar y cuántos recordatorios de mañana faltan por enviar (según lo registrado en el CRM; no cuenta a los clientes que pidieron no recibir avisos), con un botón para abrir el CRM y mandarlos.
+- Endpoints: `GET /api/:slug/admin/tiempo/huecos`, `GET /api/:slug/admin/tiempo/patron`, `POST /api/:slug/admin/tiempo/relampago`, `GET /api/:slug/admin/tiempo/inasistencias` (solo el dueño, con sesión).
+- Pruebas: `node --test test/tiempo.test.js`.
+
+## Marco legal (pestaña Legal)
+
+Orientación general para abrir y operar una barbería en Mérida, Yucatán. **No es asesoría legal ni fiscal**: confirma cada paso con la autoridad que lo emite, con tu contador o con un abogado.
+
+- **Checklist guiado** de 18 pasos en 5 grupos:
+  - SAT: RFC, régimen RESICO u otro, e.firma, CFDI 4.0 y factura global, declaraciones.
+  - Ayuntamiento de Mérida: uso de suelo, licencia de funcionamiento, anuncio y Protección Civil.
+  - Salud: aviso de funcionamiento en COFEPRIS/DIGIPRiS y reglamento de higiene.
+  - Equipo: empleado o comisionista, alta patronal en el IMSS e impuesto estatal sobre nómina.
+  - Datos personales: aviso de privacidad, derechos ARCO, promociones y seguridad.
+- Cada paso explica por qué importa, qué necesitas, dónde se hace y su **fuente oficial**. Solo se muestra el costo cuando la fuente oficial lo publica. Marca los pasos listos, agrega notas (folio, vencimiento) y ve tu **progreso en %**.
+- **Documentos imprimibles** con los datos de tu barbería. Se abren en otra pestaña para imprimir o guardar como PDF:
+  - aviso de privacidad integral y simplificado;
+  - contrato con barbero comisionista, con advertencia sobre la subordinación laboral;
+  - reglamento interno de higiene y atención.
+- **Aviso de privacidad público** en `/<tu-enlace>/privacidad`, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (DOF 20/03/2025). La autoridad es la Secretaría Anticorrupción y Buen Gobierno.
+- Para que los documentos salgan completos:
+  - En **Ajustes**, llena la dirección y el WhatsApp del negocio.
+  - En **Legal**, llena el nombre o razón social del titular y, si quieres, un correo para temas de privacidad.
+  - El "correo para avisos de citas" de Ajustes nunca se publica.
+- Solo el dueño ve esta pestaña; los barberos no tienen acceso.
+- Rutas:
+  - `GET /api/:slug/admin/legal/pasos`
+  - `POST /api/:slug/admin/legal/paso {paso, hecho?, nota?}`: lo que no mandes se conserva.
+  - `POST /api/:slug/admin/legal/datos {titular?, correo?}`
+  - `GET /api/:slug/admin/legal/doc/:tipo`
+  - `GET /:slug/privacidad`
+- Pruebas: `node --test test/legal.test.js`.
+
 ## Página pública: tema "Estilo Internacional", paquetes y extras
 
 El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` + `public/tema-ei.css`). Se dibuja en el servidor con datos de la base, así que Google lee la página completa y cada barbería nueva puede estrenarla con sus propios datos.

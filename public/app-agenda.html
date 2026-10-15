@@ -10,7 +10,7 @@
 <div class="paso" id="p3"><h3><span class="n">3</span>Día</h3><div class="dias" id="dias"></div></div>
 <div class="paso" id="p4"><h3><span class="n">4</span>Hora</h3><div id="horas"><div class="vacio">Elige un día para ver los horarios.</div></div></div>
 <div class="paso" id="p5"><h3><span class="n">5</span>Tus datos</h3>
-<label for="nom">Nombre</label><input id="nom" autocomplete="name" placeholder="Cómo te llamas"><label for="tel">WhatsApp</label><input id="tel" inputmode="tel" autocomplete="tel" placeholder="999 123 4567" maxlength="14"><small id="tel-e" class="aviso-campo" hidden>Escribe los 10 dígitos de tu WhatsApp.</small></div>
+<label for="nom">Nombre</label><input id="nom" autocomplete="name" placeholder="Cómo te llamas"><label for="tel">WhatsApp</label><input id="tel" inputmode="tel" autocomplete="tel" placeholder="999 123 4567" maxlength="14"><small id="tel-e" class="aviso-campo" hidden>Escribe los 10 dígitos de tu WhatsApp.</small><small style="display:block;margin-top:10px;color:var(--dim)">Usamos tu nombre y WhatsApp solo para agendar tu cita y avisarte sobre ella. Consulta el <a id="priv" style="color:var(--gold)" target="_blank" rel="noopener">aviso de privacidad</a>.</small></div>
 <div id="err" role="alert"></div></div><div id="hecho" hidden></div></section>
 <section id="estilos" hidden><h2>Estilos de corte</h2><div class="chips" id="filtros"></div><div class="grid" id="eg"></div></section>
 <section id="productos" hidden><h2>Productos</h2><p>Pregunta por ellos en tu próxima visita.</p><div class="grid" id="pg"></div></section>
@@ -142,12 +142,14 @@ ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codig
 (async()=>{try{I=await J('/info')}catch(e){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">No se pudo cargar la agenda. Revisa tu conexión y recarga.</div>';return}
 if(I.tema==='ei'){for(const h of ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Manrope:wght@600;700;800&display=swap','/agenda-ei.css?v=1']){const l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.append(l)}$('meta[name=theme-color]').content='#f1efe9'}
 document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
-$('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'');
+$('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'')+' · <a style="color:var(--gold)" href="/'+encodeURIComponent(N)+'/privacidad">Aviso de privacidad</a>';$('#priv').href='/'+encodeURIComponent(N)+'/privacidad';
 $('#nom').value=S.nom||'';$('#tel').value=fmtTel(S.tel||'');
 E=await J('/estilos');try{const c=await J('/paquetes');EX=c.extras;PQ=Object.fromEntries(c.paquetes.map(p=>[p.id,p.lavado]))}catch(e){}try{TR=(await J('/trabajos')).filter(t=>!t.barbero||I.barberos.includes(t.barbero))}catch(e){TR=[]}pintaE();
 $('#pg').innerHTML=(await J('/productos')).map(p=>`<div class="card"><h3>${esc(p.nombre)}</h3><p>${esc(p.descripcion)}</p><b>${m(p.precio)}</b></div>`).join('');
 if(!I.abierto){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">Esta barbería no está recibiendo citas en línea por ahora.'+(I.whatsapp?' Escríbenos por <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>.':'')+'</div>';ir();return}
 if(I.barberos.length===1)X.bar=I.barberos[0];rapido();{const P=new URLSearchParams(location.search),pb=P.get('barbero');if(pb&&I.barberos.includes(pb))X.bar=pb;
 /* Desde la página pública: ?servicio=<id>&extras=<id,id> llega con el paquete y los extras ya elegidos */
-const ps=P.get('servicio'),e=ps&&E.find(x=>String(x.id)===ps);if(e){X.srv=e;X.ex=(P.get('extras')||'').split(',').map(Number).filter(id=>id>0&&EX.some(y=>y.id===id))}}pintaS();pintaB();pintaD();horas();estado();ir();cargaYo();if(X.srv&&!X.bar)baja('#p2')})();
+const ps=P.get('servicio'),e=ps&&E.find(x=>String(x.id)===ps);if(e){X.srv=e;X.ex=(P.get('extras')||'').split(',').map(Number).filter(id=>id>0&&EX.some(y=>y.id===id))}
+/* Desde una promo relámpago: ?fecha=AAAA-MM-DD abre ese día si está entre los 14 que muestra la agenda */
+const pf=P.get('fecha'),dias14=[...Array(14)].map((_,k)=>{const d=new Date();d.setDate(d.getDate()+k);return iso(d)});if(dias14.includes(pf))X.dia=pf}pintaS();pintaB();pintaD();horas();estado();ir();cargaYo();if(X.srv&&!X.bar)baja('#p2')})();
 </script></body></html>
