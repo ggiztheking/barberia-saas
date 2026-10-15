@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check crm.js && node --check billing.js && node --check paquetes.js &&node --check public/crm-app.js && node --check public/galeria.js",
-    "test": "node --test \"test/*.test.js\""
+    "check": "node --check server.js && node --check crm.js && node --check billing.js && node --check paquetes.js && node --check marketing.js && node --check public/crm-app.js && node --check public/galeria.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
   },
   "engines": { "node": ">=18" },
   "dependencies": { "express": "^4.19.2", "pg": "^8.12.0" }

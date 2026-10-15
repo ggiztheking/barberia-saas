@@ -19,7 +19,7 @@ Abre http://localhost:3000. Las tablas y el negocio inicial `estilo-internaciona
 
 ## Pruebas
 
-`npm run check` revisa la sintaxis y `npm test` arranca el servidor real y prueba registro, páginas públicas y paneles. Necesita `DATABASE_URL` (sin ella las pruebas se omiten); en CI GitHub levanta un PostgreSQL de servicio. Usa una base de desarrollo, nunca la de producción.
+`npm run check` revisa la sintaxis y `npm test` arranca el servidor real y prueba registro, páginas públicas y paneles. Necesita `DATABASE_URL` (sin ella las pruebas se omiten); en CI GitHub levanta un PostgreSQL de servicio. Usa una base de desarrollo, nunca la de producción. Los archivos de prueba corren uno a la vez (`--test-concurrency=1`): en una base vacía, dos servidores creando las tablas a la vez chocan. La base debe ser UTF8 (en Windows, `initdb` usa WIN1252 por defecto y rechaza emojis).
 
 ## Variables de entorno
 
@@ -47,6 +47,15 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 - Un pago fallido o una cancelación no quitan el acceso: el negocio queda vigente hasta su `vence` y después `vigente()` bloquea las reservas.
 - Stripe: crea un precio recurrente mensual por plan y pon su id en `STRIPE_PRICE_*`. Mercado Pago: la suscripción (`preapproval`) se crea con `PRECIO_*`. Eventos de Mercado Pago atendidos: `subscription_authorized_payment` (acredita) y `subscription_preapproval` (estado).
 - Antes de cobrar de verdad, prueba cada proveedor en su modo de pruebas.
+
+## Marketing con IA
+
+La pestaña **Marketing** del panel (`marketing.js`) genera, con los datos reales de la barbería (servicios, agenda de la semana, clientes por reactivar): qué hacer esta semana, plan de lanzamiento de 30 días, promociones, textos para redes, calendario de contenido y reseñas de Google.
+
+- **Sin `ANTHROPIC_API_KEY`** entrega plantillas editables y no gasta cuota. **Con clave** usa Claude (`claude-sonnet-5-5` por defecto, `ANTHROPIC_MODEL` para cambiarlo) con un tope mensual por plan (`IA_CUOTA_*`). Si la IA falla se entrega la plantilla y no se descuenta.
+- A la IA solo se le manda el nombre, la dirección, los servicios, la carga de la agenda y conteos de clientes; nunca contraseñas, teléfonos ni correos.
+- Cada pieza se puede copiar, **programar** como publicación (aparece en CRM → Contenido) o **enviar por WhatsApp** a un grupo del CRM como campaña (`{nombre}` lo llena el CRM por cliente).
+- Pendiente: probar con una clave real de Anthropic (las pruebas usan un servidor simulado) y que la IA lea también las reseñas y la competencia.
 
 ## Página pública: tema "Estilo Internacional", paquetes y extras
 
