@@ -6,7 +6,7 @@ app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Po
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
 const fs = require('fs');
-app.get('/health', (q, s) => s.send('ok'));
+app.get('/health', async (q, s) => { await LISTO; s.send('ok'); }); // "ok" solo cuando las tablas y migraciones ya están listas
 app.get('/i/:id', async (q, s) => {
   if (!/^\d{1,10}$/.test(q.params.id)) return s.sendStatus(404);
   try {
@@ -102,7 +102,7 @@ const seed = async id => {
   for (const r of PROD) await pool.query('INSERT INTO productos(nombre,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4)', [...r, id]);
   await seedPreg(id);
 };
-(async () => {
+const listo = (async () => { // los módulos con tablas propias esperan a que termine este arranque
   await pool.query(`CREATE TABLE IF NOT EXISTS negocios (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, nombre TEXT NOT NULL, whatsapp TEXT, direccion TEXT, maps TEXT,
     barberos TEXT NOT NULL DEFAULT 'Barbero 1', hora_ini INT DEFAULT 10, hora_fin INT DEFAULT 19, fotos BOOLEAN DEFAULT false, plan TEXT DEFAULT 'prueba', salt TEXT, hash TEXT, creado TIMESTAMPTZ DEFAULT now())`);
   await pool.query(`CREATE TABLE IF NOT EXISTS citas (id SERIAL PRIMARY KEY, cliente TEXT NOT NULL, telefono TEXT, barbero TEXT NOT NULL, servicio TEXT NOT NULL,
@@ -163,6 +163,7 @@ const seed = async id => {
   await pool.query('DROP INDEX IF EXISTS citas_slot');
   await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS citas_slot2 ON citas(negocio_id,barbero,fecha,hora) WHERE estado<>'cancelada'");
 })().catch(console.error);
+const SEP_EXTRAS = ' + '; // paquetes.js une el servicio y sus extras con este separador en citas.servicio
 
 const SUPER = process.env.SUPER_PASS || '';
 const superAuth = (q, s, n) => {
@@ -451,6 +452,8 @@ api.get('/admin/finanzas/export', auth, wrap(async (q, s) => {
 
 require('./crm')(app, api, { pool, auth, wrap, HOY, bars, tel10, limita });
 require('./billing')(app, api, { pool, auth, wrap, limita, vigente });
+const paq = require('./paquetes')(app, api, { pool, auth, wrap, listo, PRINCIPAL });
+const LISTO = Promise.all([listo, paq.listo]); // los arranques que fallan ya registran su error y no bloquean
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
 api.post('/cliente/registro', wrap(async (q, s) => {
@@ -551,7 +554,7 @@ api.post('/eventos/:id/asistir', wrap(async (q, s) => {
   catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ya estás apuntado a este evento' }); throw x; }
   s.json({ ok: true, van: e.van + 1 });
 }));
-api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img,COALESCE(c.n,0)::int AS pop FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text LEFT JOIN (SELECT servicio,COUNT(*) n FROM citas WHERE negocio_id=$1 AND fecha > CURRENT_DATE - 90 AND estado<>'cancelada' GROUP BY servicio) c ON c.servicio=e.nombre WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows)));
+api.get('/estilos', wrap(async (q, s) => s.json((await pool.query("SELECT e.id,e.nombre,e.tipo,e.descripcion,e.precio,i.id AS img,COALESCE(c.n,0)::int AS pop FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text LEFT JOIN (SELECT split_part(servicio,'" + SEP_EXTRAS + "',1) AS servicio,COUNT(*) n FROM citas WHERE negocio_id=$1 AND fecha > CURRENT_DATE - 90 AND estado<>'cancelada' GROUP BY 1) c ON c.servicio=e.nombre WHERE e.negocio_id=$1 AND e.tipo<>'referencia' ORDER BY (e.tipo<>'paquete'), e.id", [q.neg.id])).rows)));
 api.get('/productos', wrap(async (q, s) => s.json((await pool.query('SELECT id,nombre,descripcion,precio FROM productos WHERE negocio_id=$1 ORDER BY id', [q.neg.id])).rows)));
 api.get('/horarios', wrap(async (q, s) => {
   const { fecha, barbero } = q.query, n = q.neg;
@@ -584,16 +587,16 @@ api.post('/citas', wrap(async (q, s) => {
   if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || h < n.hora_ini || h > n.hora_fin)
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
   if (fecha < HOY() || (fecha === HOY() && h <= ahoraH())) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
-  const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2', [servicio, n.id]);
-  if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
+  const cot = await paq.cotiza(n.id, servicio, q.body.extras);
+  if (!cot) return s.status(400).json({ error: 'Servicio no válido' });
   if (cerrado(n, fecha) || (await pool.query('SELECT 1 FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND (hora IS NULL OR hora=$4)', [n.id, fecha, barbero, hora])).rowCount)
     return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
   try {
     const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio,barbero',
-      [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, crypto.randomBytes(6).toString('hex'), n.id]);
+      [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, cot.servicio, fecha, hora, cot.precio, crypto.randomBytes(6).toString('hex'), n.id]);
     const cu = await cuentaCli(q).catch(() => null);
     if (cu) await pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=$3', [cu.id, n.id, r.rows[0].codigo]);
-    avisa(n, { evento: 'nueva_cita', cliente: String(cliente).slice(0, 80), telefono: String(telefono).slice(0, 20), barbero, servicio, fecha, hora, precio: Number(r.rows[0].precio) });
+    avisa(n, { evento: 'nueva_cita', cliente: String(cliente).slice(0, 80), telefono: String(telefono).slice(0, 20), barbero, servicio: cot.servicio, fecha, hora, precio: Number(r.rows[0].precio) });
     s.json(r.rows[0]);
   } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese horario ya se ocupó. Elige otro.' }); throw x; }
 }));
@@ -648,7 +651,7 @@ api.get('/admin/insights', auth, wrap(async (q, s) => {
   const [dia, est, srv, bar, hor, cli, pend, vieja] = await Promise.all([
     Q(`SELECT fecha::text f, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY fecha`),
     Q(`SELECT estado, COUNT(*)::int n FROM citas WHERE ${W} GROUP BY estado`),
-    Q(`SELECT servicio, COUNT(*)::int n, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY servicio ORDER BY n DESC LIMIT 5`),
+    Q(`SELECT split_part(servicio,'${SEP_EXTRAS}',1) AS servicio, COUNT(*)::int n, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY 1 ORDER BY n DESC LIMIT 5`),
     Q(`SELECT barbero, COUNT(*)::int n, COALESCE(SUM(precio),0)::float ingresos FROM citas WHERE ${C} GROUP BY barbero ORDER BY ingresos DESC`),
     Q(`SELECT hora, COUNT(*)::int n FROM citas WHERE ${W} AND estado<>'cancelada' GROUP BY hora ORDER BY hora`),
     Q(`SELECT COUNT(DISTINCT telefono)::int total, COUNT(DISTINCT telefono) FILTER (WHERE telefono IN (SELECT telefono FROM citas WHERE negocio_id=$1 AND fecha<$2 AND estado='completada'))::int recurrentes FROM citas WHERE ${C}`),
@@ -693,7 +696,7 @@ api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
 
 api.post('/admin/item', auth, wrap(async (q, s) => {
   const { tabla, tipo, descripcion, precio } = q.body, nm = String(q.body.nombre || '').trim().slice(0, 60);
-  if (!['estilos', 'productos'].includes(tabla) || !nm || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Escribe el nombre y un precio válido' });
+  if (!['estilos', 'productos'].includes(tabla) || !nm || nm.includes(SEP_EXTRAS) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Escribe el nombre y un precio válido' });
   if ((await pool.query(`SELECT COUNT(*)::int n FROM ${tabla} WHERE negocio_id=$1`, [q.neg.id])).rows[0].n >= 40) return s.status(400).json({ error: 'Llegaste al límite de 40 elementos' });
   const d = String(descripcion || '').slice(0, 120);
   if (tabla === 'estilos') await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4,$5)', [nm, ['clásico', 'nuevo', 'servicio'].includes(tipo) ? tipo : 'servicio', d, precio, q.neg.id]);
