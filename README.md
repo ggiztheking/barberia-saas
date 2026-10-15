@@ -48,6 +48,23 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 - Stripe: crea un precio recurrente mensual por plan y pon su id en `STRIPE_PRICE_*`. Mercado Pago: la suscripción (`preapproval`) se crea con `PRECIO_*`. Eventos de Mercado Pago atendidos: `subscription_authorized_payment` (acredita) y `subscription_preapproval` (estado).
 - Antes de cobrar de verdad, prueba cada proveedor en su modo de pruebas.
 
+## Página pública: tema "Estilo Internacional", paquetes y extras
+
+El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` + `public/tema-ei.css`). Se dibuja en el servidor con datos de la base, así que Google lee la página completa y cada barbería nueva puede estrenarla con sus propios datos.
+
+- **Elegir tema:** pestaña **Página** del panel → "Diseño de tu página" (`POST /api/:slug/admin/tema`). Sin tema, la página sigue siendo la oscura de siempre.
+- **Paquetes y extras:** se editan en la misma pestaña. Un paquete es un `estilos` con `tipo='paquete'` (más `incluye`, `etiqueta`, `lavado`); los extras están en la tabla `extras`. Sin paquetes, la plantilla usa los servicios de la barbería.
+- **Reservar:** "Reservar" abre la agenda con `?servicio=<id>&extras=<ids>`. El precio final lo calcula siempre el servidor; un extra de lavado no se cobra si el paquete ya lo incluye. La cita guarda `"Paquete + Extra"` en `servicio`, y las estadísticas agrupan por el nombre base.
+- **Estilo Internacional** trae su catálogo real, sembrado una sola vez al arrancar (4 paquetes, 3 extras y 6 referencias de estilo). Las referencias se marcan como generadas con IA porque no son trabajos de la barbería.
+- **Rutas viejas:** el negocio se llamaba `onyx`; se renombra solo y `/onyx/...` y `/api/onyx/...` redirigen.
+- **Pendiente:** las referencias de estilo aún no se editan desde el panel, y los espacios de la agenda son por hora completa (el horario "9:30 AM" se muestra como texto, pero las citas empiezan a la hora en punto).
+
+## Dónde alojarlo
+
+- **Ahora:** Railway, tal como está (se despliega solo con cada push a `main`). No hace falta nada más mientras no haya dominio propio.
+- **Con dominio propio:** Cloudflare delante (DNS, CDN, HTTPS), fotos en R2 en lugar de la tabla `imagenes` (hoy guarda los archivos dentro de PostgreSQL) y un dominio por barbería con Cloudflare for SaaS (incluye 100).
+- **Pasar a un VPS:** solo si la factura de Railway supera de forma sostenida unos USD 40–50/mes, o hay decenas de barberías pagando, o la base o las fotos crecen mucho. Confirma los precios en las páginas oficiales antes de comprar; cambian seguido.
+
 ## App instalable (PWA)
 
 Cada barbería se puede instalar como app desde su página (`/<slug>`): botón "Instalar app" en Android/Chrome, o Compartir → Añadir a pantalla de inicio en iPhone. El manifest (`/<slug>/manifest.json`) usa el nombre del negocio y `public/sw.js` muestra `offline.html` sin internet; las citas nunca se guardan en caché.
