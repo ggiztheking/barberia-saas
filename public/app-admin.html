@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>Administrador</title><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Panel"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
-<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="marketing">Marketing</button><button role="tab" data-t="plan">Plan</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
+<header><span class="logo" id="logo">ADMIN</span><nav><a id="lp" href="#">Mi página</a><a id="la" href="#">Mi agenda</a><a id="lc" href="#">CRM</a><a href="#" id="salir">Salir</a></nav></header><nav class="tabs" role="tablist" id="tabs"><button role="tab" data-t="hoy">Hoy</button><button role="tab" data-t="finanzas">Finanzas</button><button role="tab" data-t="clientes">Clientes</button><button role="tab" data-t="resumen">Resumen</button><button role="tab" data-t="pagina">Página</button><button role="tab" data-t="marketing">Marketing</button><button role="tab" data-t="tiempo">Agenda llena</button><button role="tab" data-t="legal">Legal</button><button role="tab" data-t="plan">Plan</button><button role="tab" data-t="ajustes">Ajustes</button></nav><main>
 <div id="plan"></div>
 <section data-tab="hoy"><div id="pasos"></div><div class="acc" style="margin-bottom:6px"><button class="alt" onclick="mover(-1)" aria-label="Día anterior">‹</button><input type="date" id="dia" style="flex:1;margin:6px 0 0"><button class="alt" onclick="mover(1)" aria-label="Día siguiente">›</button><button onclick="mover(0)">Hoy</button></div>
 <h2 id="tit" style="margin-top:22px">Agenda del día</h2><div id="lista"></div>
@@ -22,7 +22,7 @@
 <h2 style="margin-top:30px">Últimos 6 meses</h2><div id="fin-serie"></div>
 <h2 style="margin-top:30px">¿En qué se va el dinero?</h2><div id="fin-cat"></div>
 <h2 style="margin-top:30px">Recuperación de la inversión</h2><div id="fin-inv"></div>
-<h2 style="margin-top:30px">Movimientos del mes</h2><div id="fin-mov"></div><button class="alt" style="margin-top:14px" onclick="exportaFin()">Descargar para Excel</button></section>
+<h2 style="margin-top:30px">Movimientos del mes</h2><div id="fin-mov"></div><button class="alt" style="margin-top:14px" onclick="exportaFin()">Descargar para Excel</button><div id="mod-finanzas"></div></section>
 <section data-tab="clientes" hidden><h2>Clientes</h2><div id="cli"></div><h2 style="margin-top:34px">Cuentas de clientes</h2><div id="ctas"></div></section>
 <section data-tab="resumen" hidden><h2>Resumen</h2><div class="chips" id="per"></div><div id="ins"></div>
 <h2 style="margin-top:34px">Descargar citas</h2><p>Un archivo que abre en Excel o Google Sheets, con todas las citas del periodo.</p>
@@ -37,6 +37,8 @@
 <h2 style="margin-top:34px">Eventos</h2><p>Lanzamientos, días de promoción o fiestas. Tus clientes se apuntan desde tu página y aquí ves quién va.</p><div id="eventos"></div>
 <h2 style="margin-top:34px">Preguntas frecuentes</h2><p>Aparecen en tu página y ayudan a que Google te muestre mejor.</p><div id="preguntas"></div></section>
 <section data-tab="marketing" hidden><h2>Marketing</h2><p>Ideas y textos listos para conseguir y recuperar clientes, hechos con los datos de tu barbería. Revísalos antes de usarlos.</p><div id="mk-ui"></div></section>
+<section data-tab="tiempo" hidden><div id="mod-tiempo"></div></section>
+<section data-tab="legal" hidden><div id="mod-legal"></div></section>
 <section data-tab="plan" hidden><h2>Tu plan</h2><p>Aquí ves el estado de tu suscripción y puedes pagar o cancelar. Tu prueba gratis no se pierde al contratar.</p><div id="plan-ui"></div></section>
 <section data-tab="ajustes" hidden><div id="miperfil" hidden><h2>Mi perfil</h2><p>Así te ven los clientes en la página de la barbería.</p><div class="panel" id="mp"></div></div><div class="solo-dueno"><h2>Mi barbería</h2><div id="aj"></div>
 <h2 style="margin-top:34px">Equipo</h2><p>Cada persona entra con su propio correo y contraseña. Los barberos solo ven y manejan sus propias citas.</p><div id="equipo"></div></div>
@@ -156,7 +158,9 @@ $('#ins').innerHTML=(r.sinCerrar?`<div class="msg" style="margin-bottom:16px">Ti
 <h3>Horas con más citas</h3>${barras(H.map(h=>[h.hora,h.n]),n=>n+' citas')}<div class="ejes"><span>${H.length?H[0].hora:''}</span><span>${H.length?H[H.length-1].hora:''}</span></div>
 <h3>Clientes</h3>${hb([['Recurrentes',r.clientes.recurrentes,r.clientes.recurrentes+' clientes'],['Nuevos',nu,nu+' clientes']])}`}
 let TAB=sessionStorage['t_'+N]||'hoy';
-function tab(t){TAB=t;try{sessionStorage['t_'+N]=t}catch(e){}document.querySelectorAll('[data-tab]').forEach(s=>s.hidden=s.dataset.tab!==t);document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));scrollTo({top:0});if(t==='plan')planUI();if(t==='marketing')mkUI()}
+function tab(t){TAB=t;try{sessionStorage['t_'+N]=t}catch(e){}document.querySelectorAll('[data-tab]').forEach(s=>s.hidden=s.dataset.tab!==t);document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));scrollTo({top:0});if(t==='plan')planUI();if(t==='marketing')mkUI();const m=(window.MOD||{})[t];if(m)m($('#mod-'+t))}
+// Módulos con su propio archivo (public/admin-*.js): cada uno se registra con modulo(pestaña, fn) y dibuja en #mod-<pestaña>.
+var MOD={};function modulo(t,f){MOD[t]=f;if(TAB===t)f($('#mod-'+t))}
 // ---- Marketing con IA (marketing.js)
 let MK={ideas:[],estado:null};
 async function mkUI(){const el=$('#mk-ui');try{[MK.estado,MK.ideas]=await Promise.all([J('/admin/marketing/estado'),J('/admin/marketing/ideas')])}catch(e){el.innerHTML=`<div class="msg">${esc(e.message)}</div>`;return}
@@ -325,8 +329,9 @@ $('#fin-f').value=hoy();document.querySelectorAll('#fin-seg button').forEach(b=>
 $('#fin-ant').onclick=()=>{FM=cMes(FM,-1);finanzas()};$('#fin-sig').onclick=()=>{FM=cMes(FM,1);finanzas()};
 {const l=document.createElement('link');l.rel='manifest';l.href='/'+N+'/panel.json';document.head.append(l)}
 (async()=>{try{ME=await J('/admin/me')}catch(e){return}DUENO=ME.rol==='dueno';$('#logo').textContent=ME.negocio||'ADMIN';document.title='Panel · '+(ME.negocio||'');$('#salir').textContent='Salir · '+(ME.nombre||'').split(' ')[0];
-if(!DUENO){document.querySelectorAll('.solo-dueno,#tabs [data-t=clientes],#tabs [data-t=resumen],#tabs [data-t=pagina],#tabs [data-t=finanzas],#tabs [data-t=plan]').forEach(x=>x.hidden=true);if(['clientes','resumen','pagina','finanzas','plan'].includes(TAB))tab('hoy');miPerfil();
+if(!DUENO){document.querySelectorAll('.solo-dueno,#tabs [data-t=clientes],#tabs [data-t=resumen],#tabs [data-t=pagina],#tabs [data-t=finanzas],#tabs [data-t=plan],#tabs [data-t=marketing],#tabs [data-t=tiempo],#tabs [data-t=legal]').forEach(x=>x.hidden=true);if(['clientes','resumen','pagina','finanzas','plan','marketing','tiempo','legal'].includes(TAB))tab('hoy');miPerfil();
 const [i,e]=await Promise.all([J('/info'),J('/estilos')]);BARS=[ME.barbero];SERV=e.map(x=>x.nombre);NEG=i.nombre;HI=+i.hora_ini;HF=+i.hora_fin;forms();bloqueos();trabajos()}
 else{catalogo();periodo();insights();clientes();fotos();cuentasCl();ajustes().then(()=>{equipo();perfiles()}).catch(e=>toast(e.message));textos();eventos();preguntas();paquetesUI();finanzas().then(()=>{$('#fin-b').innerHTML=opt(BARS)})}
 miCuenta();cargar();pasos()})();
-</script></body></html>
+</script>
+<script src="/admin-contabilidad.js?v=1"></script><script src="/admin-tiempo.js?v=1"></script><script src="/admin-legal.js?v=1"></script></body></html>

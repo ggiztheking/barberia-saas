@@ -454,6 +454,9 @@ require('./crm')(app, api, { pool, auth, wrap, HOY, bars, tel10, limita });
 require('./billing')(app, api, { pool, auth, wrap, limita, vigente });
 const paq = require('./paquetes')(app, api, { pool, auth, wrap, listo, PRINCIPAL });
 require('./marketing')(app, api, { pool, auth, wrap, HOY, limita, listo });
+require('./contabilidad')(app, api, { pool, auth, wrap, HOY, limita, listo });
+require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10 });
+require('./legal')(app, api, { pool, auth, wrap, HOY, limita, listo });
 const LISTO = Promise.all([listo, paq.listo]); // los arranques que fallan ya registran su error y no bloquean
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
