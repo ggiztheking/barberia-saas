@@ -21,6 +21,7 @@ module.exports = (app, api, d) => {
       ['bajo', 'Degradado bajo', 'Transición cerca de la oreja. Discreto y limpio.'], ['medio', 'Degradado medio', 'Transición a media altura. Equilibrio y definición.'],
       ['alto', 'Degradado alto', 'Transición cerca de la sien. Contraste marcado.'], ['taper', 'Taper', 'Degradado localizado en patillas y nuca.'],
       ['clasico', 'Clásico', 'Laterales con largo y raya lateral. Acabado natural.'], ['texturizado', 'Texturizado', 'Mechones definidos y movimiento en la parte superior.']],
+    etiquetaReferencia: 'Referencia generada con IA', // el sitio original aclara que estas imágenes no son trabajos de la barbería
     lema: 'Tu estilo. Sin fronteras.', acerca: 'Un corte que habla por ti. Un espacio para sentirte tú.', horario: '9:30 AM a 11:00 PM' };
 
   const listoBD = (async () => {
@@ -38,7 +39,10 @@ module.exports = (app, api, d) => {
   // Sin pisar nada: un paquete que ya existe por nombre (p. ej. "Corte y barba") se convierte en paquete y conserva su precio.
   async function siembraEI() {
     const n = (await Q('SELECT id FROM negocios WHERE slug=$1', [PRINCIPAL]))[0];
-    if (!n || (await Q("SELECT 1 FROM config WHERE k='ei_catalogo'")).length) return;
+    if (!n) return;
+    // Catálogos sembrados antes de que existiera la etiqueta: se completa sin tocar nada más.
+    await pool.query("UPDATE estilos SET etiqueta=$2 WHERE negocio_id=$1 AND tipo='referencia' AND etiqueta IS NULL", [n.id, EI.etiquetaReferencia]);
+    if ((await Q("SELECT 1 FROM config WHERE k='ei_catalogo'")).length) return;
     const cl = await pool.connect();
     try {
       await cl.query('BEGIN');
@@ -50,7 +54,7 @@ module.exports = (app, api, d) => {
         for (const [k, [nombre, precio, lavado]] of EI.extras.entries()) await cl.query('INSERT INTO extras(negocio_id,nombre,precio,lavado,orden) VALUES($1,$2,$3,$4,$5)', [n.id, nombre, precio, lavado, k]);
       if (!(await cl.query("SELECT 1 FROM estilos WHERE negocio_id=$1 AND tipo='referencia'", [n.id])).rowCount)
         for (const [archivo, nombre, detalle] of EI.referencias) {
-          const e = (await cl.query("INSERT INTO estilos(negocio_id,nombre,tipo,precio,descripcion) VALUES($1,$2,'referencia',0,$3) RETURNING id", [n.id, nombre, detalle])).rows[0];
+          const e = (await cl.query("INSERT INTO estilos(negocio_id,nombre,tipo,precio,descripcion,etiqueta) VALUES($1,$2,'referencia',0,$3,$4) RETURNING id", [n.id, nombre, detalle, EI.etiquetaReferencia])).rows[0];
           let foto = null; try { foto = fs.readFileSync(path.join(__dirname, 'public', 'img', 'ref', archivo + '.jpg')); } catch (x) { /* sin foto, la referencia se muestra sin imagen */ }
           if (foto) await cl.query("INSERT INTO imagenes(negocio_id,tipo,ref,mime,data) VALUES($1,'servicio',$2,'image/jpeg',$3) ON CONFLICT (negocio_id,tipo,ref) DO NOTHING", [n.id, String(e.id), foto]);
         }
@@ -76,6 +80,10 @@ module.exports = (app, api, d) => {
     const ex = ids.length ? (await Q('SELECT id,nombre,precio::float AS precio,lavado FROM extras WHERE negocio_id=$1 AND id=ANY($2) ORDER BY id', [negId, ids])).filter(x => !(x.lavado && b.lavado)) : [];
     return { precio: Math.round((b.precio + ex.reduce((a, x) => a + x.precio, 0)) * 100) / 100, servicio: String(nombre) + ex.map(x => SEP + x.nombre).join('') };
   };
+
+  const referencias = id => Q("SELECT e.id,e.nombre,e.descripcion,e.etiqueta,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 AND e.tipo='referencia' ORDER BY e.id", [id]);
+  // Para barberías sin paquetes: sus servicios hacen de paquetes en la plantilla (primero combos y barba, luego los cortes), máximo 4.
+  const servicios = id => Q("SELECT id,nombre,precio::float AS precio,descripcion FROM estilos WHERE negocio_id=$1 AND tipo<>'referencia' ORDER BY (tipo='servicio') DESC,id LIMIT 4", [id]);
 
   api.get('/paquetes', wrap(async (q, s) => s.json(await catalogo(q.neg.id))));
 
@@ -103,7 +111,15 @@ module.exports = (app, api, d) => {
     if ((await pool.query('SELECT COUNT(*)::int c FROM extras WHERE negocio_id=$1', [q.neg.id])).rows[0].c >= 20) return s.status(400).json({ error: 'Llegaste al límite de 20 extras' });
     s.json({ id: (await pool.query('INSERT INTO extras(negocio_id,nombre,precio,lavado,orden) VALUES($1,$2,$3,$4,(SELECT COALESCE(MAX(orden),0)+1 FROM extras WHERE negocio_id=$1)) RETURNING id', [q.neg.id, nombre, precio, !!b.lavado])).rows[0].id });
   }));
+  // Tema de la página pública: 'ei' (Estilo Internacional, claro) o 'oscuro' (el anterior, que se guarda como NULL).
+  const TEMAS = [['oscuro', 'Oscuro y dorado'], ['ei', 'Estilo Internacional (claro)']];
+  api.get('/admin/tema', auth, (q, s) => s.json({ tema: q.neg.tema || 'oscuro', temas: TEMAS.map(([id, nombre]) => ({ id, nombre })) }));
+  api.post('/admin/tema', auth, wrap(async (q, s) => {
+    if (!TEMAS.some(([id]) => id === q.body.tema)) return s.status(400).json({ error: 'Ese tema no existe' });
+    await pool.query('UPDATE negocios SET tema=$2 WHERE id=$1', [q.neg.id, q.body.tema === 'oscuro' ? null : q.body.tema]);
+    s.json({ ok: true });
+  }));
   api.post('/admin/extra/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM extras WHERE id=$1 AND negocio_id=$2', [q.body.id, q.neg.id]); s.json({ ok: true }); }));
 
-  return { catalogo, cotiza, listo: listoBD, SEP };
+  return { catalogo, cotiza, referencias, servicios, listo: listoBD, SEP };
 };
