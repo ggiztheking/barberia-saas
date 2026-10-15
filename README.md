@@ -46,6 +46,9 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 - Cada cobro aprobado suma 30 días al vencimiento, igual que `pagar_basico`/`pagar_pro` en `/super`. Cada evento se procesa una sola vez (tabla `pagos_eventos`), aunque el proveedor lo reenvíe.
 - Un pago fallido o una cancelación no quitan el acceso: el negocio queda vigente hasta su `vence` y después `vigente()` bloquea las reservas.
 - Stripe: crea un precio recurrente mensual por plan y pon su id en `STRIPE_PRICE_*`. Mercado Pago: la suscripción (`preapproval`) se crea con `PRECIO_*`. Eventos de Mercado Pago atendidos: `subscription_authorized_payment` (acredita) y `subscription_preapproval` (estado).
+- **Una sola suscripción por negocio.** Cada enlace de pago se guarda como `pendiente`; al crear otro, el anterior se cancela en el proveedor. Si aun así se autorizan dos, la segunda queda `duplicada` y se cancela sola en el proveedor (su primer cobro sí suma días: el dinero ya entró). "Cancelar" cancela todas las vivas. Un aviso tardío nunca revive una suscripción cancelada.
+- Mercado Pago liga la suscripción al correo de la cuenta de MP que paga: la pestaña Plan lo pide (por defecto, el del panel). Para probar con usuarios de prueba, `MP_PAYER_EMAIL_PRUEBA` lo reemplaza por el de la cuenta Comprador de prueba. Suscripciones no tiene credenciales `TEST-`: se prueba con el Access Token de producción de una cuenta Vendedor de prueba.
+- Si MP avisa de un recurso que no existe (p. ej. "Simular notificación"), se responde 200 `no_encontrado` para que no reintente; las caídas de MP sí responden 500 para que reintente. Los cobros no aprobados se registran en el log con su estado y motivo.
 - Antes de cobrar de verdad, prueba cada proveedor en su modo de pruebas.
 
 ## Marketing con IA

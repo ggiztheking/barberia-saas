@@ -12,7 +12,7 @@ const sufijo = Date.now().toString(36);
 let srv, base, stripe, mp;
 const stripeVisto = [], mpVisto = [];
 // Ids únicos por corrida: la base de desarrollo persiste y los eventos ya procesados no se repiten.
-const MP_OK = String(Date.now()) + '1', MP_NO = String(Date.now()) + '2', MP_PRE = 'pre_' + sufijo;
+const MP_OK = String(Date.now()) + '1', MP_NO = String(Date.now()) + '2', MP_TARDE = String(Date.now()) + '3', MP_PRE = 'pre_' + sufijo;
 
 // Servidor falso: guarda lo que recibe y responde con lo que dicte `resp(metodo, url, cuerpo)`.
 const falso = (visto, resp) => new Promise(ok => {
@@ -26,17 +26,29 @@ const url = s => `http://127.0.0.1:${s.address().port}`;
 
 before(async () => {
   if (sinBase) return;
-  stripe = await falso(stripeVisto, (m, u) => (u === '/v1/checkout/sessions' ? [200, { url: 'https://checkout.stripe.test/sesion' }] : [200, {}]));
+  let sesiones = 0;
+  stripe = await falso(stripeVisto, (m, u) => (u === '/v1/checkout/sessions' ? [200, { id: `cs_${sufijo}_${++sesiones}`, url: 'https://checkout.stripe.test/sesion' }] : [200, {}]));
+  // mp.ids: ids de las próximas suscripciones creadas; mp.pre: otras suscripciones que el MP falso conoce.
   mp = await falso(mpVisto, (m, u) => {
-    if (m === 'POST' && u === '/preapproval') return [200, { init_point: 'https://mercadopago.test/suscribir' }];
-    if (u === '/authorized_payments/' + MP_OK) return [200, { preapproval_id: MP_PRE, payment: { status: 'approved' } }];
-    if (u === '/authorized_payments/' + MP_NO) return [200, { preapproval_id: MP_PRE, payment: { status: 'rejected' } }];
+    if (m === 'POST' && u === '/preapproval') return [200, { id: mp.ids.shift() || MP_PRE, init_point: 'https://mercadopago.test/suscribir' }];
+    if (m === 'PUT' && u.startsWith('/preapproval/')) return [200, { status: 'cancelled' }];
+    if (u === '/authorized_payments/' + MP_OK || u === '/authorized_payments/' + MP_TARDE) return [200, { preapproval_id: MP_PRE, payment: { status: 'approved' } }];
+    if (u === '/authorized_payments/' + MP_NO) return [200, { preapproval_id: MP_PRE, payment: { status: 'rejected', status_detail: 'cc_rejected_other_reason' } }];
     if (u === '/preapproval/' + MP_PRE) return [200, { status: 'authorized', external_reference: `${mp.negId}:pro`, payer_id: 77 }];
+    const otra = mp.pre[u.replace('/preapproval/', '')];
+    if (m === 'GET' && otra) return [200, otra];
     return [404, {}];
   });
+  mp.ids = []; mp.pre = {};
   ({ base, parar: srv } = await arranca({ SUPER_PASS: SUPER, STRIPE_SECRET_KEY: 'sk_test_falsa', STRIPE_PRICE_BASICO: 'price_basico', STRIPE_PRICE_PRO: 'price_pro', STRIPE_WEBHOOK_SECRET: WH_STRIPE,
     STRIPE_API_URL: url(stripe), MP_ACCESS_TOKEN: 'TEST-falso', MP_WEBHOOK_SECRET: WH_MP, MP_API_URL: url(mp), PRECIO_BASICO: '199', PRECIO_PRO: '599', PUBLIC_URL: 'https://ejemplo.test' }));
 });
+// Aviso firmado de Mercado Pago, como lo manda MP: data.id y type en la URL y en el cuerpo.
+const notificaMP = (id, tipo = 'subscription_authorized_payment', secreto = WH_MP) => {
+  const ts = String(Date.now()), rid = 'req-' + id, v1 = crypto.createHmac('sha256', secreto).update(`id:${String(id).toLowerCase()};request-id:${rid};ts:${ts};`).digest('hex');
+  return fetch(`${base}/webhooks/mercadopago?data.id=${id}&type=${tipo}`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-signature': `ts=${ts},v1=${v1}`, 'x-request-id': rid }, body: JSON.stringify({ type: tipo, data: { id } }) });
+};
 after(() => { if (srv) srv(); if (stripe) stripe.close(); if (mp) mp.close(); });
 
 const negocioId = async slug => (await (await fetch(base + '/api/super/negocios', { headers: { 'x-super': SUPER } })).json()).find(n => n.slug === slug).id;
@@ -74,7 +86,7 @@ test('Stripe: checkout, pago, repetición, renovación y cancelación', { skip: 
   assert.equal(f.get('success_url'), `https://ejemplo.test/${slug}/admin?pago=ok`);
 
   assert.equal((await post(slug, cookie, 'checkout', { plan: 'oro', proveedor: 'stripe' })).status, 400);
-  assert.equal(await mandaOk(evento('evt_' + sufijo + '_1', 'checkout.session.completed', { mode: 'subscription', subscription: 'sub_' + sufijo, customer: 'cus_1', client_reference_id: String(negId), metadata: { plan: 'basico' } })), 'ok');
+  assert.equal(await mandaOk(evento('evt_' + sufijo + '_1', 'checkout.session.completed', { id: `cs_${sufijo}_1`, mode: 'subscription', subscription: 'sub_' + sufijo, customer: 'cus_1', client_reference_id: String(negId), metadata: { plan: 'basico' } })), 'ok');
   assert.equal((await post(slug, cookie, 'checkout', { plan: 'pro', proveedor: 'stripe' })).status, 409, 'no permite una segunda suscripción activa');
 
   const pagada = (id) => evento(id, 'invoice.paid', { subscription: 'sub_' + sufijo, customer: 'cus_1', subscription_details: { metadata: { negocio_id: String(negId), plan: 'basico' } } });
@@ -100,6 +112,19 @@ test('Stripe: checkout, pago, repetición, renovación y cancelación', { skip: 
   const d = await plan(slug, cookie);
   assert.equal(d.suscripcion.estado, 'cancelada');
   assert.equal(d.abierto, true, 'conserva el acceso hasta que venza');
+});
+
+test('Stripe: dos enlaces de pago no generan dos cobros mensuales', { skip: sinBase }, async () => {
+  const slug = 'sd-' + sufijo, cookie = await registra(base, slug), negId = await negocioId(slug);
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'pro', proveedor: 'stripe' })).status, 200);
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'pro', proveedor: 'stripe' })).status, 200);
+  assert.match(stripeVisto.at(-2).url, /^\/v1\/checkout\/sessions\/cs_[\w-]+\/expire$/, 'la sesión vieja se vence al crear otra');
+  const completa = (n) => evento(`evt_${sufijo}_d${n}`, 'checkout.session.completed', { mode: 'subscription', subscription: `sub_${sufijo}_d${n}`, client_reference_id: String(negId), metadata: { plan: 'pro' } });
+  assert.equal(await mandaOk(completa(1)), 'ok');
+  assert.equal(await mandaOk(completa(2)), 'duplicada');
+  assert.equal(stripeVisto.at(-1).metodo + ' ' + stripeVisto.at(-1).url, `DELETE /v1/subscriptions/sub_${sufijo}_d2`);
+  assert.equal((await post(slug, cookie, 'cancelar')).status, 200);
+  assert.ok(stripeVisto.some(v => v.metodo === 'DELETE' && v.url === `/v1/subscriptions/sub_${sufijo}_d1`));
 });
 
 test('Stripe: un evento de un negocio inexistente se ignora sin romper', { skip: sinBase }, async () => {
@@ -141,6 +166,46 @@ test('Mercado Pago: checkout, firma, cobro aprobado, repetición y rechazado', {
   assert.equal((await post(slug, cookie, 'cancelar')).status, 200);
   assert.equal(mpVisto.at(-1).metodo + ' ' + mpVisto.at(-1).url, 'PUT /preapproval/' + MP_PRE);
   assert.equal((await plan(slug, cookie)).suscripcion.estado, 'cancelada');
+
+  // Un cobro que MP aprobó antes de la cancelación pero avisa tarde: suma sus días, pero no revive la suscripción.
+  const v2 = new Date((await plan(slug, cookie)).vence).getTime();
+  assert.equal((await (await notificaMP(MP_TARDE)).json()).resultado, 'ok');
+  const t = await plan(slug, cookie);
+  assert.equal(t.suscripcion.estado, 'cancelada');
+  assert.ok(Math.abs(new Date(t.vence).getTime() - v2 - 30 * DIA) < 60e3);
+});
+
+test('Mercado Pago: dos enlaces de pago no generan dos cobros mensuales', { skip: sinBase }, async () => {
+  const slug = 'md-' + sufijo, cookie = await registra(base, slug), negId = await negocioId(slug);
+  const A = 'pa_' + sufijo, B = 'pb_' + sufijo;
+  mp.ids.push(A, B);
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'basico', proveedor: 'mercadopago', correo: 'sin arroba' })).status, 400);
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'basico', proveedor: 'mercadopago', correo: 'Pago@Ejemplo.com' })).status, 200);
+  assert.equal(JSON.parse(mpVisto.at(-1).cuerpo).payer_email, 'pago@ejemplo.com', 'usa el correo de la cuenta de MP que escribió el dueño');
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'basico', proveedor: 'mercadopago' })).status, 200);
+  assert.ok(mpVisto.some(v => v.metodo === 'PUT' && v.url === '/preapproval/' + A), 'el enlace viejo se cancela al crear otro');
+
+  // Aun así el dueño alcanzó a autorizar los dos: la segunda sobra y se cancela en MP.
+  mp.pre[A] = { status: 'authorized', external_reference: `${negId}:basico` };
+  mp.pre[B] = { status: 'authorized', external_reference: `${negId}:basico` };
+  assert.equal((await (await notificaMP(A, 'subscription_preapproval')).json()).resultado, 'ok');
+  const antes = mpVisto.length;
+  assert.equal((await (await notificaMP(B, 'subscription_preapproval')).json()).resultado, 'duplicada');
+  assert.ok(mpVisto.slice(antes).some(v => v.metodo === 'PUT' && v.url === '/preapproval/' + B), 'la duplicada se cancela en MP');
+  assert.equal((await (await notificaMP(B, 'subscription_preapproval')).json()).resultado, 'duplicada', 'un aviso repetido no la revive');
+  assert.equal((await plan(slug, cookie)).suscripcion.estado, 'activa');
+
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'basico', proveedor: 'mercadopago', correo: 'no-es-correo' })).status, 409, 'con una activa no se crea otra');
+  assert.equal((await post(slug, cookie, 'cancelar')).status, 200);
+  assert.equal((await plan(slug, cookie)).suscripcion.estado, 'cancelada');
+});
+
+test('Mercado Pago: avisos de recursos que MP no conoce', { skip: sinBase }, async () => {
+  // "Simular notificación" del panel de MP usa ids inventados: se responde 200 para que MP no reintente cada 15 minutos.
+  const r = await notificaMP('123456789');
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).resultado, 'no_encontrado');
+  assert.equal((await (await notificaMP('no-existe', 'subscription_preapproval')).json()).resultado, 'no_encontrado');
 });
 
 test('las rutas de plan exigen sesión', { skip: sinBase }, async () => {

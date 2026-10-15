@@ -32,20 +32,53 @@ module.exports = (app, api, d) => {
     `INSERT INTO suscripciones(negocio_id,proveedor,ref_externa,plan,estado,cliente_ref) VALUES($1,$2,$3,$4,$5,$6)
      ON CONFLICT (proveedor,ref_externa) DO UPDATE SET estado=EXCLUDED.estado, plan=COALESCE(EXCLUDED.plan,suscripciones.plan), actualizado=now()`,
     [negId, proveedor, ref, plan, estado, cliente || null]);
-  const estadoDe = (cl, proveedor, ref, estado) => cl.query('UPDATE suscripciones SET estado=$3, actualizado=now() WHERE proveedor=$1 AND ref_externa=$2', [proveedor, ref, estado]);
+  // Estados: 'pendiente' (enlace de pago creado), vivos ('activa','pago_fallido','pausada'), finales ('cancelada','duplicada')
+  // y de cierre ('expirada' = enlace reemplazado, 'completada' = sesión de Stripe ya convertida en suscripción).
+  const VIVOS = ['activa', 'pago_fallido', 'pausada'], FINALES = ['cancelada', 'duplicada'];
+  const ESTADO_MP = { authorized: 'activa', cancelled: 'cancelada', canceled: 'cancelada', paused: 'pausada' };
+  // Una suscripción cancelada o sobrante no vuelve a "activa" ni a "pago_fallido" por un aviso tardío.
+  const estadoDe = (cl, proveedor, ref, estado) => cl.query(`UPDATE suscripciones SET estado=$3, actualizado=now() WHERE proveedor=$1 AND ref_externa=$2
+    AND (estado NOT IN ('cancelada','duplicada') OR $3 IN ('cancelada','duplicada'))`, [proveedor, ref, estado]);
   const buscaSub = async (cl, proveedor, ref) => (await cl.query('SELECT negocio_id,plan FROM suscripciones WHERE proveedor=$1 AND ref_externa=$2', [proveedor, ref])).rows[0];
   const negocioExiste = async (cl, id) => Number.isInteger(id) && id > 0 && (await cl.query('SELECT 1 FROM negocios WHERE id=$1', [id])).rowCount > 0;
 
   // Cada evento se procesa una sola vez: el registro del evento y su efecto van en la misma transacción.
-  const unaVez = async (proveedor, idEvento, tipo, fn) => {
+  const enTx = async fn => {
     const cl = await pool.connect();
     try {
       await cl.query('BEGIN');
-      if (!(await cl.query('INSERT INTO pagos_eventos(proveedor,id_evento,tipo) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [proveedor, idEvento, tipo])).rowCount) { await cl.query('ROLLBACK'); return 'repetido'; }
       const r = await fn(cl);
       await cl.query('COMMIT');
       return r || 'ok';
     } catch (e) { await cl.query('ROLLBACK').catch(() => {}); throw e; } finally { cl.release(); }
+  };
+  class Repetido extends Error {}
+  const unaVez = (proveedor, idEvento, tipo, fn) => enTx(async cl => {
+    if (!(await cl.query('INSERT INTO pagos_eventos(proveedor,id_evento,tipo) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [proveedor, idEvento, tipo])).rowCount) throw new Repetido();
+    return fn(cl);
+  }).catch(e => { if (e instanceof Repetido) return 'repetido'; throw e; });
+
+  // Guarda el estado de una suscripción. Si el negocio ya tiene OTRA viva (pagó dos enlaces), esta queda 'duplicada'
+  // y devuelve 'duplicada' para que se cancele en el proveedor: así no se le cobra dos veces cada mes.
+  const registra = async (cl, negId, proveedor, ref, plan, estado, cliente) => {
+    await cl.query('SELECT 1 FROM negocios WHERE id=$1 FOR UPDATE', [negId]); // dos avisos a la vez del mismo negocio se atienden en fila
+    const previo = (await cl.query('SELECT estado FROM suscripciones WHERE proveedor=$1 AND ref_externa=$2', [proveedor, ref])).rows[0];
+    if (VIVOS.includes(estado)) {
+      if (previo && FINALES.includes(previo.estado)) estado = previo.estado;
+      else if ((await cl.query(`SELECT 1 FROM suscripciones WHERE negocio_id=$1 AND estado IN ('activa','pago_fallido','pausada') AND NOT (proveedor=$2 AND ref_externa=$3) LIMIT 1`,
+        [negId, proveedor, ref])).rowCount) estado = 'duplicada';
+    }
+    await guarda(cl, negId, proveedor, ref, plan, estado, cliente);
+    return estado === 'duplicada' ? 'duplicada' : 'ok';
+  };
+  // Cancela en el proveedor: una suscripción, o un enlace de pago que aún no se usa.
+  const cancelaEn = (proveedor, ref) => (proveedor === 'stripe'
+    ? (ref.startsWith('cs_') ? stripePost('/v1/checkout/sessions/' + encodeURIComponent(ref) + '/expire', {}) : stripeCancela(ref))
+    : mpSend('PUT', '/preapproval/' + encodeURIComponent(ref), { status: 'cancelled' }));
+  const sobra = async (r, proveedor, ref, negId) => {
+    if (r !== 'duplicada') return;
+    console.error(`suscripción duplicada: negocio ${negId}, ${proveedor} ${ref}; se cancela para no cobrar dos veces`);
+    await cancelaEn(proveedor, ref).catch(e => console.error('no se pudo cancelar la duplicada (cancélala a mano en el panel del proveedor):', e.message));
   };
 
   // ---- Stripe
@@ -72,27 +105,30 @@ module.exports = (app, api, d) => {
     if (!E.STRIPE_WEBHOOK_SECRET || !firmaStripe(q.raw, q.get('stripe-signature'), E.STRIPE_WEBHOOK_SECRET)) return s.status(400).json({ error: 'Firma no válida' });
     const ev = q.body || {}, o = (ev.data && ev.data.object) || {};
     if (!ev.id || !ev.type) return s.status(400).json({ error: 'Evento no válido' });
+    let subRef = null, subNeg = null;
     const r = await unaVez('stripe', ev.id, ev.type, async cl => {
       if (ev.type === 'checkout.session.completed' && o.mode === 'subscription' && o.subscription) {
         const negId = Number(o.client_reference_id), plan = o.metadata && o.metadata.plan;
         if (!PLANES.includes(plan) || !(await negocioExiste(cl, negId))) return 'ignorado';
-        await guarda(cl, negId, 'stripe', o.subscription, plan, 'activa', o.customer);
-        return 'ok';
+        if (o.id) await estadoDe(cl, 'stripe', o.id, 'completada');
+        subRef = o.subscription; subNeg = negId;
+        return registra(cl, negId, 'stripe', o.subscription, plan, 'activa', o.customer);
       }
       if (ev.type === 'invoice.paid') {
         const par = (o.parent && o.parent.subscription_details) || {}, ref = o.subscription || par.subscription, meta = (o.subscription_details && o.subscription_details.metadata) || par.metadata || {};
         if (!ref) return 'ignorado';
         const sub = await buscaSub(cl, 'stripe', ref), negId = Number(meta.negocio_id || (sub && sub.negocio_id)), plan = meta.plan || (sub && sub.plan);
         if (!PLANES.includes(plan) || !(await negocioExiste(cl, negId))) return 'ignorado';
-        await acredita(cl, negId, plan);
-        await guarda(cl, negId, 'stripe', ref, plan, 'activa', o.customer);
-        return 'ok';
+        await acredita(cl, negId, plan); // el dinero ya se cobró: siempre suma sus días
+        subRef = ref; subNeg = negId;
+        return registra(cl, negId, 'stripe', ref, plan, 'activa', o.customer);
       }
       const ref = o.subscription || (o.parent && o.parent.subscription_details && o.parent.subscription_details.subscription);
       if (ev.type === 'invoice.payment_failed' && ref) { await estadoDe(cl, 'stripe', ref, 'pago_fallido'); return 'ok'; }
       if (ev.type === 'customer.subscription.deleted' && o.id) { await estadoDe(cl, 'stripe', o.id, 'cancelada'); return 'ok'; }
       return 'ignorado';
     });
+    await sobra(r, 'stripe', subRef, subNeg);
     s.json({ recibido: true, resultado: r });
   }));
 
@@ -103,8 +139,12 @@ module.exports = (app, api, d) => {
     if (!h.ts || !h.v1 || !id) return false;
     return igual(h.v1, crypto.createHmac('sha256', secreto).update(`id:${id};request-id:${q.get('x-request-id') || ''};ts:${h.ts};`).digest('hex'));
   };
+  // null si MP no conoce el recurso (p. ej. "Simular notificación" usa ids inventados): no tiene caso que MP reintente.
+  // Las caídas temporales sí lanzan error, para que el webhook responda 500 y MP lo reintente.
   const mpGet = async ruta => {
-    const r = await fetch(mpApi() + ruta, { headers: { Authorization: 'Bearer ' + E.MP_ACCESS_TOKEN }, signal: AbortSignal.timeout(15000) });
+    const r = await fetch(mpApi() + ruta, { headers: { Authorization: 'Bearer ' + E.MP_ACCESS_TOKEN }, signal: AbortSignal.timeout(10000) });
+    if (r.status === 404) return null;
+    if (r.status === 401 || r.status === 403) console.error('mercadopago: MP_ACCESS_TOKEN rechazado (' + r.status + '); revisa la clave en las variables del servidor');
     if (!r.ok) throw new Error('mercadopago ' + r.status + ' ' + ruta.replace(/\d{4,}/g, '#'));
     return r.json();
   };
@@ -123,29 +163,49 @@ module.exports = (app, api, d) => {
     // Solo el cobro de la suscripción acredita; la notificación "payment" del mismo cobro se ignora para no contarlo dos veces.
     if (tipo === 'subscription_authorized_payment') {
       const ap = await mpGet('/authorized_payments/' + encodeURIComponent(id));
-      if (!ap.preapproval_id || !ap.payment || ap.payment.status !== 'approved') return s.json({ recibido: true, resultado: 'sin_aprobar' });
-      const pre = await mpGet('/preapproval/' + encodeURIComponent(ap.preapproval_id)), { negId, plan } = refMP(pre.external_reference);
+      if (!ap) return s.json({ recibido: true, resultado: 'no_encontrado' });
+      if (!ap.preapproval_id || !ap.payment || ap.payment.status !== 'approved') {
+        // Sin datos del pagador: solo lo necesario para entender por qué no se acreditó.
+        console.log('mercadopago sin_aprobar:', JSON.stringify({ id, preapproval: ap.preapproval_id, status: ap.status, pago: ap.payment && ap.payment.status, detalle: ap.payment && ap.payment.status_detail }));
+        return s.json({ recibido: true, resultado: 'sin_aprobar' });
+      }
+      const pre = await mpGet('/preapproval/' + encodeURIComponent(ap.preapproval_id));
+      if (!pre) return s.json({ recibido: true, resultado: 'no_encontrado' });
+      const { negId, plan } = refMP(pre.external_reference);
       const r = await unaVez('mercadopago', 'ap-' + id, tipo, async cl => {
         if (!PLANES.includes(plan) || !(await negocioExiste(cl, negId))) return 'ignorado';
+        // El dinero ya se cobró: siempre suma sus días, aunque la suscripción esté cancelada o sobre.
         await acredita(cl, negId, plan);
-        await guarda(cl, negId, 'mercadopago', ap.preapproval_id, plan, 'activa', pre.payer_id && String(pre.payer_id));
-        return 'ok';
+        return registra(cl, negId, 'mercadopago', ap.preapproval_id, plan, ESTADO_MP[pre.status] || 'activa', pre.payer_id && String(pre.payer_id));
       });
+      await sobra(r, 'mercadopago', ap.preapproval_id, negId);
       return s.json({ recibido: true, resultado: r });
     }
     if (tipo === 'subscription_preapproval') {
-      const pre = await mpGet('/preapproval/' + encodeURIComponent(id)), { negId, plan } = refMP(pre.external_reference);
-      const estado = { authorized: 'activa', cancelled: 'cancelada', paused: 'pausada' }[pre.status];
-      if (estado && PLANES.includes(plan) && (await negocioExiste(pool, negId))) await guarda(pool, negId, 'mercadopago', id, plan, estado, pre.payer_id && String(pre.payer_id));
-      return s.json({ recibido: true, resultado: estado ? 'ok' : 'ignorado' });
+      const pre = await mpGet('/preapproval/' + encodeURIComponent(id));
+      if (!pre) return s.json({ recibido: true, resultado: 'no_encontrado' });
+      const { negId, plan } = refMP(pre.external_reference), estado = ESTADO_MP[pre.status];
+      if (!estado || !PLANES.includes(plan)) return s.json({ recibido: true, resultado: 'ignorado' });
+      const r = await enTx(async cl => ((await negocioExiste(cl, negId)) ? registra(cl, negId, 'mercadopago', id, plan, estado, pre.payer_id && String(pre.payer_id)) : 'ignorado'));
+      await sobra(r, 'mercadopago', id, negId);
+      return s.json({ recibido: true, resultado: r });
     }
     s.json({ recibido: true, resultado: 'ignorado' });
   }));
 
   // ---- Panel del dueño (auth ya limita todo /admin/plan/* al dueño)
-  const activa = async negId => (await Q("SELECT proveedor,ref_externa,plan,estado FROM suscripciones WHERE negocio_id=$1 AND estado IN ('activa','pago_fallido','pausada') ORDER BY actualizado DESC LIMIT 1", [negId]))[0];
+  const vivas = negId => Q("SELECT proveedor,ref_externa,plan,estado FROM suscripciones WHERE negocio_id=$1 AND estado IN ('activa','pago_fallido','pausada') ORDER BY actualizado DESC", [negId]);
+  // Un enlace de pago viejo no debe poder autorizarse junto con uno nuevo: se cancela en el proveedor antes de crear otro.
+  const cierraPendientes = async negId => {
+    for (const p of await Q("SELECT proveedor,ref_externa FROM suscripciones WHERE negocio_id=$1 AND estado='pendiente'", [negId])) {
+      await cancelaEn(p.proveedor, p.ref_externa).catch(e => console.error('cerrar enlace pendiente:', e.message));
+      await estadoDe(pool, p.proveedor, p.ref_externa, 'expirada');
+    }
+  };
+  const correoOk = c => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(c);
   api.get('/admin/plan', auth, wrap(async (q, s) => {
-    const n = q.neg, sub = (await Q('SELECT proveedor,plan,estado FROM suscripciones WHERE negocio_id=$1 ORDER BY actualizado DESC LIMIT 1', [n.id]))[0] || null;
+    const n = q.neg, sub = (await Q(`SELECT proveedor,plan,estado FROM suscripciones WHERE negocio_id=$1 AND estado IN ('activa','pago_fallido','pausada','cancelada')
+      ORDER BY (estado<>'cancelada') DESC, actualizado DESC LIMIT 1`, [n.id]))[0] || null;
     s.json({ plan: n.plan, vence: n.vence, activo: n.activo !== false, abierto: vigente(n), suscripcion: sub,
       planes: PLANES.map(p => ({ id: p, nombre: NOMBRE[p], precio: precio(p), stripe: stripeLista(p), mercadopago: mpLista(p) })) });
   }));
@@ -154,7 +214,12 @@ module.exports = (app, api, d) => {
     if (!PLANES.includes(plan) || !['stripe', 'mercadopago'].includes(prov)) return s.status(400).json({ error: 'Elige un plan y una forma de pago' });
     if (limita('ck' + q.neg.id, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Espera un rato.' });
     if (!(prov === 'stripe' ? stripeLista(plan) : mpLista(plan))) return s.status(503).json({ error: 'Esta forma de pago aún no está disponible. Escríbenos y te activamos el plan.' });
-    if (await activa(q.neg.id)) return s.status(409).json({ error: 'Ya tienes una suscripción activa. Cancélala primero si quieres cambiar de plan.' });
+    if ((await vivas(q.neg.id)).length) return s.status(409).json({ error: 'Ya tienes una suscripción activa. Cancélala primero si quieres cambiar de plan.' });
+    // Mercado Pago liga la suscripción al correo de la cuenta de MP que paga, que puede no ser el del panel.
+    // MP_PAYER_EMAIL_PRUEBA (solo en pruebas) lo reemplaza por el de la cuenta Comprador de prueba.
+    const correo = String(E.MP_PAYER_EMAIL_PRUEBA || q.body.correo || q.user.email || '').trim().toLowerCase();
+    if (prov === 'mercadopago' && !correoOk(correo)) return s.status(400).json({ error: 'Escribe el correo de tu cuenta de Mercado Pago' });
+    await cierraPendientes(q.neg.id);
     const panel = `${base(q)}/${encodeURIComponent(q.params.slug)}/admin`;
     try {
       if (prov === 'stripe') {
@@ -162,21 +227,31 @@ module.exports = (app, api, d) => {
           success_url: panel + '?pago=ok', cancel_url: panel + '?pago=cancelado', client_reference_id: String(q.neg.id), customer_email: q.user.email,
           'metadata[plan]': plan, 'metadata[negocio_id]': String(q.neg.id), 'subscription_data[metadata][plan]': plan, 'subscription_data[metadata][negocio_id]': String(q.neg.id) });
         if (!j.url) throw new Error('stripe sin url');
+        if (j.id) await guarda(pool, q.neg.id, 'stripe', j.id, plan, 'pendiente');
         return s.json({ url: j.url });
       }
-      const j = await mpSend('POST', '/preapproval', { reason: `${NOMBRE[plan]} · ${q.neg.nombre}`.slice(0, 120), external_reference: `${q.neg.id}:${plan}`, payer_email: q.user.email,
+      const j = await mpSend('POST', '/preapproval', { reason: `${NOMBRE[plan]} · ${q.neg.nombre}`.slice(0, 120), external_reference: `${q.neg.id}:${plan}`, payer_email: correo,
         auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: precio(plan), currency_id: 'MXN' }, back_url: panel + '?pago=ok', status: 'pending' });
       if (!j.init_point) throw new Error('mercadopago sin init_point');
+      if (j.id) await guarda(pool, q.neg.id, 'mercadopago', String(j.id), plan, 'pendiente');
       s.json({ url: j.init_point });
-    } catch (e) { console.error('checkout:', e.message); s.status(502).json({ error: 'No pudimos iniciar el pago. Intenta de nuevo en un momento.' }); }
+    } catch (e) {
+      console.error('checkout:', e.message);
+      const datos = /^(stripe|mercadopago) 4\d\d/.test(e.message); // 4xx: algo de los datos o de la cuenta, reintentar no sirve
+      s.status(502).json({ error: datos ? 'El proveedor de pago rechazó los datos. Revisa el correo de tu cuenta o escríbenos.' : 'No pudimos iniciar el pago. Intenta de nuevo en un momento.' });
+    }
   }));
+  // Cancela TODAS las suscripciones vivas del negocio (por si alguna quedó duplicada) y los enlaces de pago sin usar.
   api.post('/admin/plan/cancelar', auth, wrap(async (q, s) => {
-    const sub = await activa(q.neg.id);
-    if (!sub) return s.status(404).json({ error: 'No tienes una suscripción activa' });
-    try {
-      if (sub.proveedor === 'stripe') await stripeCancela(sub.ref_externa); else await mpSend('PUT', '/preapproval/' + encodeURIComponent(sub.ref_externa), { status: 'cancelled' });
-    } catch (e) { console.error('cancelar:', e.message); return s.status(502).json({ error: 'No pudimos cancelar ahora. Intenta de nuevo en un momento.' }); }
-    await estadoDe(pool, sub.proveedor, sub.ref_externa, 'cancelada');
+    const subs = await vivas(q.neg.id);
+    if (!subs.length) return s.status(404).json({ error: 'No tienes una suscripción activa' });
+    let fallo = false;
+    for (const sub of subs) {
+      try { await cancelaEn(sub.proveedor, sub.ref_externa); await estadoDe(pool, sub.proveedor, sub.ref_externa, 'cancelada'); }
+      catch (e) { console.error('cancelar:', e.message); fallo = true; }
+    }
+    await cierraPendientes(q.neg.id);
+    if (fallo) return s.status(502).json({ error: 'No pudimos cancelar ahora. Intenta de nuevo en un momento.' });
     s.json({ ok: true, vence: q.neg.vence });
   }));
 };
