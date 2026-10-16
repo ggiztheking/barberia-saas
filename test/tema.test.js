@@ -94,3 +94,29 @@ test('el dueño cambia el tema y la página lo refleja; las demás siguen con el
   assert.ok(!(await (await fetch(`${base}/${slug}`)).text()).includes('/tema-ei.css'));
   assert.equal((await fetch(`${base}/api/${slug}/admin/tema`)).status, 401);
 });
+
+test('plantilla v2: sin fotos se ve completa con imágenes ilustrativas, y muestra equipo, sellos, reseña y horario reales', { skip: sinBase }, async () => {
+  const slug = 'v2-' + sufijo;
+  await registra(base, slug, '10.2.0.1');
+  await pool.query("UPDATE negocios SET tema='ei', hora_ini=9, abre_min=30, intervalo=30, hora_fin=19, horario_texto=NULL, resena='https://g.page/r/ejemplo/review' WHERE slug=$1", [slug]);
+  const id = (await pool.query('SELECT id, barberos FROM negocios WHERE slug=$1', [slug])).rows[0];
+  const antes = await (await fetch(`${base}/${slug}`)).text();
+  assert.ok(antes.includes('/img/tema/portada.jpg') && antes.includes('IMAGEN ILUSTRATIVA'), 'sin fotos usa una portada ilustrativa y lo dice');
+  assert.ok(!antes.includes('FOTO REAL'), 'no presume fotos reales');
+  assert.match(antes, /\/img\/tema\/paq-(corte|fresco|barba|vip)\.jpg/, 'los paquetes sin foto llevan imagen ilustrativa');
+  assert.ok(antes.includes('Imagen ilustrativa'), 'cada imagen ilustrativa va marcada');
+  assert.ok(antes.includes('id="como"'), 'sección de pasos');
+  assert.ok(antes.includes('9:30 AM a 8:00 PM'), 'el horario respeta la apertura a la media hora y el último espacio');
+  assert.ok(antes.includes('g.page/r/ejemplo/review'), 'enlace para dejar reseña');
+  assert.ok(!antes.includes('id="equipo"'), 'sin perfiles no hay sección de equipo');
+  assert.ok(!antes.includes('TARJETA DE SELLOS'), 'sin programa activo no hay tarjeta de sellos');
+  const barbero = String(id.barberos).split(',')[0].trim();
+  await pool.query("INSERT INTO perfiles(negocio_id,barbero,especialidad,bio) VALUES($1,$2,'Fades y barba','Diez años de oficio') ON CONFLICT (negocio_id,barbero) DO UPDATE SET especialidad=EXCLUDED.especialidad, bio=EXCLUDED.bio", [id.id, barbero]);
+  await pool.query("INSERT INTO lealtad_config(negocio_id,activo,cada,premio,desde) VALUES($1,true,8,'el siguiente corte gratis',CURRENT_DATE) ON CONFLICT (negocio_id) DO UPDATE SET activo=true, cada=8, premio=EXCLUDED.premio", [id.id]);
+  const h = await (await fetch(`${base}/${slug}`)).text();
+  assert.ok(h.includes('id="equipo"') && h.includes('FADES Y BARBA') && h.includes('Diez años de oficio'), 'equipo con su perfil');
+  assert.ok(h.includes(`/${slug}/agenda?barbero=${encodeURIComponent(barbero)}`), 'agendar con ese barbero');
+  assert.ok(h.includes('TARJETA DE SELLOS') && h.includes('Cada <b>8 visitas</b>, el siguiente corte gratis.'), 'tarjeta de sellos con sus datos');
+  const urls = new Set([...h.matchAll(/src="(\/img\/[^"]+)"/g)].map(m => m[1]));
+  for (const u of urls) assert.equal((await fetch(base + u)).status, 200, u);
+});

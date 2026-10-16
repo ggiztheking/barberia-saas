@@ -794,7 +794,14 @@ const paginaEI = async (q, n) => {
     pool.query("SELECT id FROM imagenes WHERE negocio_id=$1 AND tipo='portada'", [n.id]).then(r => r.rows[0])]);
   const paquetes = cat.paquetes.length ? cat.paquetes : servicios.map(x => ({ id: x.id, nombre: x.nombre, precio: x.precio, etiqueta: '', incluye: [x.descripcion || x.nombre], lavado: false }));
   const whatsappUrl = n.whatsapp ? 'https://wa.me/' + wa(n.whatsapp) + '?text=' + encodeURIComponent(`Hola, quiero reservar en ${n.nombre}. ¿Qué horarios tienen disponibles?`) : '';
-  return temaEI({ n, base: `${q.protocol}://${q.get('host')}`, paquetes, extras: cat.extras, referencias, trabajos, preguntas, portada: portada && portada.id, abierto: vigente(n), whatsappUrl });
+  // Equipo (perfil y foto de cada barbero de la lista) y tarjeta de sellos si está activa (la tabla la crea lealtad.js).
+  const [perf, fotosB, leal] = await Promise.all([
+    pool.query('SELECT barbero,especialidad,bio,instagram FROM perfiles WHERE negocio_id=$1', [n.id]).then(r => r.rows),
+    pool.query("SELECT id,ref FROM imagenes WHERE negocio_id=$1 AND tipo='barbero'", [n.id]).then(r => r.rows),
+    pool.query('SELECT cada,premio FROM lealtad_config WHERE negocio_id=$1 AND activo AND premio IS NOT NULL', [n.id]).then(r => r.rows[0] || null).catch(() => null)]);
+  const P = Object.fromEntries(perf.map(x => [x.barbero, x])), F = Object.fromEntries(fotosB.map(x => [x.ref, x.id]));
+  const equipo = bars(n).map(b => ({ nombre: b, especialidad: (P[b] || {}).especialidad || '', bio: (P[b] || {}).bio || '', instagram: (P[b] || {}).instagram || '', foto: F[b] || null }));
+  return temaEI({ n, base: `${q.protocol}://${q.get('host')}`, paquetes, extras: cat.extras, referencias, trabajos, preguntas, portada: portada && portada.id, abierto: vigente(n), whatsappUrl, equipo, lealtad: leal });
 };
 const NEG = fs.readFileSync(__dirname + '/public/negocio.html', 'utf8');
 const he = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
