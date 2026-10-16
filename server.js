@@ -211,7 +211,7 @@ app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
   await pool.query(`UPDATE negocios SET ${A} WHERE id=$1`, [q.params.id]);
   s.json({ ok: true });
 }));
-const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks', 'onyx', 'terminos', 'privacidad', 'soporte'];
+const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks', 'onyx', 'terminos', 'privacidad', 'soporte', 'en'];
 app.post('/api/registro', wrap(async (q, s) => {
   if (limita('r' + q.ip, 5, 3600e3)) return s.status(429).json({ error: 'Demasiados registros. Intenta más tarde.' });
   const nombre = String(q.body.nombre || '').trim().slice(0, 60), slug = String(q.body.slug || '').toLowerCase(), pw = String(q.body.password || '');
@@ -468,6 +468,7 @@ require('./marketing')(app, api, { pool, auth, wrap, HOY, limita, listo });
 require('./contabilidad')(app, api, { pool, auth, wrap, HOY, limita, listo });
 require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10, todas, cerrado, bars, ahoraH, vigente });
 require('./legal')(app, api, { pool, auth, wrap, HOY, limita, listo });
+require('./lealtad')(app, api, { pool, auth, wrap, HOY, limita, listo });
 const LISTO = Promise.all([listo, paq.listo]); // los arranques que fallan ya registran su error y no bloquean
 // ---- Cuentas de clientes
 const ligaCodigos = (q, id) => { const c = (Array.isArray(q.body.codigos) ? q.body.codigos : []).filter(x => typeof x === 'string').slice(0, 30); return c.length ? pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=ANY($3) AND cuenta_id IS NULL', [id, q.neg.id, c]) : null; };
@@ -739,6 +740,7 @@ const conPrecios = f => { let t; return (q, s) => {
   s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace(/__BASE__/g, base).replace('__SOPORTE__', sitio.soporte()));
 }; };
 app.get('/', conPrecios('saas.html'));
+app.get('/en', conPrecios('saas-en.html')); // landing en inglés
 app.get('/registro', page('registro.html'));
 app.get('/super', conPrecios('app-super.html'));
 app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));

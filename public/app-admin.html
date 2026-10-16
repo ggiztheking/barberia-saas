@@ -23,7 +23,7 @@
 <h2 style="margin-top:30px">¿En qué se va el dinero?</h2><div id="fin-cat"></div>
 <h2 style="margin-top:30px">Recuperación de la inversión</h2><div id="fin-inv"></div>
 <h2 style="margin-top:30px">Movimientos del mes</h2><div id="fin-mov"></div><button class="alt" style="margin-top:14px" onclick="exportaFin()">Descargar para Excel</button><div id="mod-finanzas"></div></section>
-<section data-tab="clientes" hidden><h2>Clientes</h2><div id="cli"></div><h2 style="margin-top:34px">Cuentas de clientes</h2><div id="ctas"></div></section>
+<section data-tab="clientes" hidden><h2>Clientes</h2><div id="cli"></div><h2 style="margin-top:34px">Cuentas de clientes</h2><div id="ctas"></div><div id="mod-clientes"></div></section>
 <section data-tab="resumen" hidden><h2>Resumen</h2><div class="chips" id="per"></div><div id="ins"></div>
 <h2 style="margin-top:34px">Descargar citas</h2><p>Un archivo que abre en Excel o Google Sheets, con todas las citas del periodo.</p>
 <div class="panel"><div class="acc"><div style="flex:1;min-width:140px"><label for="ex-d">Desde</label><input type="date" id="ex-d"></div><div style="flex:1;min-width:140px"><label for="ex-h">Hasta</label><input type="date" id="ex-h"></div></div><button onclick="exporta()">Descargar archivo</button></div></section>
@@ -35,7 +35,7 @@
 <h2 style="margin-top:34px">Fotos</h2><p>Se ven en tu página, en la agenda y en tu acceso. Se ajustan solas de tamaño. Las de servicios y productos se suben en Ajustes.</p><div id="fotos"></div>
 <h2 style="margin-top:34px">Perfiles del equipo</h2><p>Especialidad, una frase y su Instagram. En tu página cada uno tiene su botón "Agendar con…".</p><div id="perfiles"></div>
 <h2 style="margin-top:34px">Eventos</h2><p>Lanzamientos, días de promoción o fiestas. Tus clientes se apuntan desde tu página y aquí ves quién va.</p><div id="eventos"></div>
-<h2 style="margin-top:34px">Preguntas frecuentes</h2><p>Aparecen en tu página y ayudan a que Google te muestre mejor.</p><div id="preguntas"></div></section>
+<h2 style="margin-top:34px">Preguntas frecuentes</h2><p>Aparecen en tu página y ayudan a que Google te muestre mejor.</p><div id="preguntas"></div><div id="mod-pagina"></div></section>
 <section data-tab="marketing" hidden><h2>Marketing</h2><p>Ideas y textos listos para conseguir y recuperar clientes, hechos con los datos de tu barbería. Revísalos antes de usarlos.</p><div id="mk-ui"></div></section>
 <section data-tab="tiempo" hidden><div id="mod-tiempo"></div></section>
 <section data-tab="legal" hidden><div id="mod-legal"></div></section>
@@ -45,7 +45,7 @@
 <h2 style="margin-top:34px">Galería de trabajos</h2><p>Fotos de cortes que han hecho. Tus clientes las ven al elegir el corte o el barbero, y en tu página.</p><div id="trab"></div>
 <h2 style="margin-top:34px">Descansos y días libres</h2><div id="blq"></div>
 <div class="solo-dueno"><h2 style="margin-top:34px">Servicios y precios</h2><div id="cat"></div></div>
-<h2 style="margin-top:34px">Mi cuenta</h2><div id="micuenta"></div></section>
+<div id="mod-ajustes" class="solo-dueno"></div><h2 style="margin-top:34px">Mi cuenta</h2><div id="micuenta"></div></section>
 </main><button class="fab-p" id="fab" aria-label="Acciones rápidas" onclick="acciones()">+</button>
 <script src="/galeria.js?v=1"></script>
 <script>
@@ -334,4 +334,5 @@ const [i,e]=await Promise.all([J('/info'),J('/estilos')]);BARS=[ME.barbero];SERV
 else{catalogo();periodo();insights();clientes();fotos();cuentasCl();ajustes().then(()=>{equipo();perfiles()}).catch(e=>toast(e.message));textos();eventos();preguntas();paquetesUI();finanzas().then(()=>{$('#fin-b').innerHTML=opt(BARS)})}
 miCuenta();cargar();pasos()})();
 </script>
-<script src="/admin-contabilidad.js?v=2"></script><script src="/admin-tiempo.js?v=2"></script><script src="/admin-legal.js?v=2"></script></body></html>
+<script src="/admin-contabilidad.js?v=2"></script><script src="/admin-tiempo.js?v=2"></script><script src="/admin-legal.js?v=2"></script>
+<script src="/admin-agenda.js?v=1"></script><script src="/admin-referencias.js?v=1"></script><script src="/admin-lealtad.js?v=1"></script></body></html>
