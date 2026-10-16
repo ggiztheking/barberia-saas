@@ -63,3 +63,20 @@ test('el registro guarda cuándo se aceptaron los términos y no permite slugs r
     assert.equal(r.find(x => x.slug === 'tn-' + sufijo).terminos, null);
   } finally { await pool.end(); }
 });
+
+test('con dominio propio, el dominio de Railway redirige al propio (salvo API, avisos, health e imágenes)', { skip: sinBase }, async () => {
+  const { base: b, parar: p } = await arranca({ PUBLIC_URL: 'https://www.ejemplo.xyz' });
+  const pide = (ruta, host, metodo = 'GET') => new Promise((ok, mal) => {
+    const u = new URL(b + ruta), r = require('node:http').request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: metodo, headers: { Host: host } }, res => { res.resume(); ok({ status: res.statusCode, location: res.headers.location }); });
+    r.on('error', mal); r.end();
+  });
+  try {
+    const r = await pide('/estilo-internacional?x=1', 'app-production-53c5.up.railway.app');
+    assert.equal(r.status, 301);
+    assert.equal(r.location, 'https://www.ejemplo.xyz/estilo-internacional?x=1', 'conserva la ruta y los parámetros');
+    for (const ruta of ['/health', '/api/estilo-internacional/info', '/i/1']) assert.notEqual((await pide(ruta, 'app-production-53c5.up.railway.app')).status, 301, ruta);
+    assert.notEqual((await pide('/webhooks/mercadopago', 'app-production-53c5.up.railway.app', 'POST')).status, 301, 'los avisos de pago no se redirigen');
+    assert.equal((await pide('/terminos', 'www.ejemplo.xyz')).status, 200, 'el dominio propio se sirve normal');
+    assert.equal((await pide('/terminos', '127.0.0.1')).status, 200, 'otros hosts (local) no se redirigen');
+  } finally { p(); }
+});

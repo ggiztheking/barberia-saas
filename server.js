@@ -2,6 +2,14 @@ const express = require('express'), { Pool } = require('pg'), crypto = require('
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb', verify: (q, s, buf) => { if (q.url.startsWith('/webhooks/')) q.raw = buf; } })); // los webhooks de pago se firman sobre el cuerpo crudo
+// Con dominio propio (PUBLIC_URL), quien entra por el dominio *.up.railway.app se va al propio con 301: una sola dirección
+// para Google y los enlaces viejos siguen sirviendo. No se tocan la API, los avisos de pago, /health ni las imágenes /i/.
+app.use((q, s, n) => {
+  const p = process.env.PUBLIC_URL;
+  if (!p || !['GET', 'HEAD'].includes(q.method) || !/\.up\.railway\.app$/i.test(q.hostname || '') || /^\/(api|webhooks|health|i)(\/|$)/.test(q.path)) return n();
+  try { if (new URL(p).hostname !== q.hostname) return s.redirect(301, p.replace(/\/$/, '') + q.originalUrl); } catch (e) { /* PUBLIC_URL mal escrita: se sirve normal */ }
+  n();
+});
 app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN', 'Strict-Transport-Security': 'max-age=15552000', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' }); n(); });
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
