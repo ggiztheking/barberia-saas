@@ -249,3 +249,11 @@ test('Mercado Pago: una suscripción que MP rechaza no frena la revisión de las
   assert.equal(a.plan, 'basico', 'la buena se activó aunque la otra falló');
   assert.equal(a.suscripcion.estado, 'activa');
 });
+
+test('la página comercial y /super muestran los precios que se cobran', { skip: sinBase }, async () => {
+  const landing = await (await fetch(base + '/')).text();
+  assert.ok(landing.includes('$199') && landing.includes('$599'), 'usa PRECIO_BASICO y PRECIO_PRO');
+  assert.ok(!landing.includes('__PRECIO'), 'no quedan marcadores');
+  const sup = await (await fetch(base + '/super')).text();
+  assert.ok(sup.includes('b*199+p*599') && !sup.includes('__PRECIO'), 'el ingreso estimado de /super usa los mismos precios');
+});

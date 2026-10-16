@@ -719,9 +719,15 @@ const existe = async (q, s, n) => {
   catch (e) { s.status(500).send('Error del servidor'); }
 };
 const page = f => (q, s) => s.sendFile(f, { root: __dirname + '/public' });
-app.get('/', page('saas.html'));
+// Páginas con los precios de los planes: salen de PRECIO_BASICO / PRECIO_PRO (lo mismo que se cobra en billing.js).
+const PRECIOS = { BASICO: 399, PRO: 899 }; // si faltan las variables
+const conPrecios = f => { let t; return (q, s) => {
+  t = t || require('fs').readFileSync(__dirname + '/public/' + f, 'utf8');
+  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])));
+}; };
+app.get('/', conPrecios('saas.html'));
 app.get('/registro', page('registro.html'));
-app.get('/super', page('app-super.html'));
+app.get('/super', conPrecios('app-super.html'));
 app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/admin'));
 app.get('/sitemap.xml', wrap(async (q, s) => {
