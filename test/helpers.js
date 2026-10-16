@@ -13,8 +13,9 @@ exports.arranca = async (env = {}) => {
 };
 
 // Registra una barbería y devuelve la cookie de sesión del dueño.
-exports.registra = async (base, slug) => {
-  const r = await fetch(base + '/api/registro', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+// `ip` (opcional) va en X-Forwarded-For: el registro admite 5 por hora por IP y un archivo de pruebas puede necesitar más.
+exports.registra = async (base, slug, ip) => {
+  const r = await fetch(base + '/api/registro', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(ip ? { 'X-Forwarded-For': ip } : {}) },
     body: JSON.stringify({ nombre: 'Barbería ' + slug, slug, dueno: 'Dueño', email: `${slug}@ejemplo.com`, password: 'clave-segura-123', whatsapp: '9991234567' }) });
   if (r.status !== 200) throw new Error('registro falló: ' + r.status);
   return r.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');

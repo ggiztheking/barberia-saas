@@ -35,6 +35,7 @@ before(async () => {
     if (u === '/authorized_payments/' + MP_OK || u === '/authorized_payments/' + MP_TARDE) return [200, { preapproval_id: MP_PRE, payment: { status: 'approved' } }];
     if (u === '/authorized_payments/' + MP_NO) return [200, { preapproval_id: MP_PRE, payment: { status: 'rejected', status_detail: 'cc_rejected_other_reason' } }];
     if (u === '/preapproval/' + MP_PRE) return [200, { status: 'authorized', external_reference: `${mp.negId}:pro`, payer_id: 77 }];
+    if (m === 'GET' && mp.malo && u === '/preapproval/' + mp.malo) return [400, { message: 'invalid preapproval id' }];
     const otra = mp.pre[u.replace('/preapproval/', '')];
     if (m === 'GET' && otra) return [200, otra];
     return [404, {}];
@@ -230,4 +231,21 @@ test('las rutas de plan exigen sesión', { skip: sinBase }, async () => {
   mp.pre[C].summarized.charged_quantity = 2;
   assert.equal((await (await notificaMP(C, 'subscription_preapproval')).json()).resultado, 'ok');
   assert.ok(Math.abs(new Date((await plan(slug, cookie)).vence).getTime() - v1 - 30 * DIA) < 60e3);
+});
+
+test('Mercado Pago: una suscripción que MP rechaza no frena la revisión de las demás', { skip: sinBase }, async () => {
+  const slug = 'mr-' + sufijo, cookie = await registra(base, slug, '10.0.0.7'), negId = await negocioId(slug), C = 'pr_' + sufijo;
+  // Una suscripción vieja (p. ej. creada con otro token) que MP ya no reconoce y responde 400, y después la buena.
+  // Se insertan directo para que la que falla quede primero en cualquier orden de revisión.
+  mp.malo = 'pm_' + sufijo;
+  const { Pool } = require('pg'), pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query("INSERT INTO suscripciones(negocio_id,proveedor,ref_externa,plan,estado,creado) VALUES($1,'mercadopago',$2,'basico','pendiente',now() - interval '1 hour')", [negId, mp.malo]);
+    await pool.query("INSERT INTO suscripciones(negocio_id,proveedor,ref_externa,plan,estado) VALUES($1,'mercadopago',$2,'basico','pendiente')", [negId, C]);
+  } finally { await pool.end(); }
+  mp.pre[C] = { status: 'authorized', external_reference: `${negId}:basico`, summarized: { charged_quantity: 1 } };
+  const a = await plan(slug, cookie);
+  assert.ok(mpVisto.some(v => v.url === '/preapproval/' + mp.malo), 'sí intentó revisar la que falla');
+  assert.equal(a.plan, 'basico', 'la buena se activó aunque la otra falló');
+  assert.equal(a.suscripcion.estado, 'activa');
 });

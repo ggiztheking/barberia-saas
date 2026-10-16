@@ -147,7 +147,8 @@ module.exports = (app, api, d) => {
     const r = await fetch(mpApi() + ruta, { headers: { Authorization: 'Bearer ' + E.MP_ACCESS_TOKEN }, signal: AbortSignal.timeout(10000) });
     if (r.status === 404) return null;
     if (r.status === 401 || r.status === 403) console.error('mercadopago: MP_ACCESS_TOKEN rechazado (' + r.status + '); revisa la clave en las variables del servidor');
-    if (!r.ok) throw new Error('mercadopago ' + r.status + ' ' + ruta.replace(/\d{4,}/g, '#'));
+    // El mensaje de MP dice por qué rechazó (p. ej. un id de otra cuenta); los números largos se tapan en el log.
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(('mercadopago ' + r.status + ' ' + ruta + ' ' + (j.message || j.error || '')).trim().replace(/\d{4,}/g, '#')); }
     return r.json();
   };
   const mpSend = async (metodo, ruta, cuerpo) => {
@@ -179,12 +180,15 @@ module.exports = (app, api, d) => {
   const sincronizaMP = async negId => {
     if (!E.MP_ACCESS_TOKEN) return;
     const subs = await Q(`SELECT ref_externa,negocio_id FROM suscripciones WHERE proveedor='mercadopago' AND ($1::int IS NULL OR negocio_id=$1)
-      AND (estado IN ('activa','pago_fallido','pausada') OR (estado='pendiente' AND creado > now() - interval '7 days'))`, [negId || null]);
+      AND (estado IN ('activa','pago_fallido','pausada') OR (estado='pendiente' AND creado > now() - interval '7 days')) ORDER BY creado`, [negId || null]);
+    // Cada suscripción por separado: si MP rechaza una (id de otra cuenta, token cambiado), las demás se revisan igual.
     for (const sub of subs) {
-      const pre = await mpGet('/preapproval/' + encodeURIComponent(sub.ref_externa));
-      if (!pre) continue;
-      const r = await enTx(cl => aplicaMP(cl, sub.ref_externa, pre, false));
-      await sobra(r, 'mercadopago', sub.ref_externa, sub.negocio_id);
+      try {
+        const pre = await mpGet('/preapproval/' + encodeURIComponent(sub.ref_externa));
+        if (!pre) continue;
+        const r = await enTx(cl => aplicaMP(cl, sub.ref_externa, pre, false));
+        await sobra(r, 'mercadopago', sub.ref_externa, sub.negocio_id);
+      } catch (e) { console.error('revisión de Mercado Pago (negocio ' + sub.negocio_id + '):', e.message); }
     }
   };
   setInterval(() => sincronizaMP().catch(e => console.error('revisión de Mercado Pago:', e.message)), 3600e3).unref();
