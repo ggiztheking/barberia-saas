@@ -735,7 +735,8 @@ const PRECIOS = { BASICO: 399, PRO: 899 }; // si faltan las variables
 const sitio = require('./sitio')(app, { esc }); // /terminos y /privacidad del SaaS
 const conPrecios = f => { let t; return (q, s) => {
   t = t || require('fs').readFileSync(__dirname + '/public/' + f, 'utf8');
-  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace('__SOPORTE__', sitio.soporte()));
+  const base = (process.env.PUBLIC_URL || `${q.protocol}://${q.get('host')}`).replace(/\/$/, ''); // para canonical y vista previa en redes
+  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace(/__BASE__/g, base).replace('__SOPORTE__', sitio.soporte()));
 }; };
 app.get('/', conPrecios('saas.html'));
 app.get('/registro', page('registro.html'));
