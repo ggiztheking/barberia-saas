@@ -196,10 +196,14 @@ module.exports = (app, api, d) => {
   app.post('/webhooks/mercadopago', (q, s, n) => {
     // Deja rastro de cada aviso (sin datos del pagador) para poder confirmar en el log del servidor que MP sí avisa.
     s.on('finish', () => console.log('mercadopago aviso:', JSON.stringify({ tipo: (q.body && q.body.type) || q.query.type || q.query.topic || null,
-      id: q.query['data.id'] ?? (q.body && q.body.data && q.body.data.id) ?? q.query.id ?? null, http: s.statusCode, firma: !!q.get('x-signature') })));
+      id: q.query['data.id'] ?? (q.body && q.body.data && q.body.data.id) ?? q.query.id ?? null, http: s.statusCode, firma: q.firma || null })));
     n();
   }, wrap(async (q, s) => {
-    if (!E.MP_WEBHOOK_SECRET || !firmaMP(q, E.MP_WEBHOOK_SECRET)) return s.status(400).json({ error: 'Firma no válida' });
+    // El aviso solo dice "revisa este id": todo lo que se acredita se vuelve a consultar en la API de MP con nuestro token,
+    // así que un aviso falso no puede activar nada. Por eso no se rechaza un aviso cuya firma no coincide (p. ej. si
+    // MP_WEBHOOK_SECRET no es la clave de la app): se procesa igual y queda en el log para corregir la clave.
+    q.firma = !q.get('x-signature') ? 'sin_firma' : E.MP_WEBHOOK_SECRET && firmaMP(q, E.MP_WEBHOOK_SECRET) ? 'valida' : 'no_valida';
+    if (q.firma !== 'valida' && limita('mpw' + q.ip, 30, 60e3)) return s.status(429).json({ error: 'Demasiados avisos' });
     const tipo = String((q.body && q.body.type) || q.query.type || q.query.topic || ''), id = String(q.query['data.id'] ?? (q.body && q.body.data && q.body.data.id) ?? '');
     if (!/^[\w-]{1,64}$/.test(id)) return s.status(400).json({ error: 'Evento no válido' });
     // Solo el cobro de la suscripción acredita; la notificación "payment" del mismo cobro se ignora para no contarlo dos veces.

@@ -42,7 +42,7 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 
 `billing.js` cobra los planes Básico y Pro con Stripe (tarjeta) y Mercado Pago. El dueño contrata, ve su estado y cancela en la pestaña **Plan** del panel.
 
-- Los webhooks son la única fuente de verdad: `POST /webhooks/stripe` (firma `Stripe-Signature`) y `POST /webhooks/mercadopago` (firma `x-signature`). Configura ambos en el panel de cada proveedor.
+- Stripe: `POST /webhooks/stripe` exige la firma `Stripe-Signature` (el evento trae los datos). Mercado Pago: `POST /webhooks/mercadopago` solo toma el id del aviso y vuelve a consultar el cobro y la suscripción en la API de MP con `MP_ACCESS_TOKEN`; por eso un aviso con firma `x-signature` que no coincide se procesa igual (queda `firma: no_valida` en el log, para corregir `MP_WEBHOOK_SECRET`) y nunca acredita nada que MP no confirme. Además, al abrir la pestaña Plan y cada hora se revisan en MP las suscripciones pendientes y vivas, así que un plan se activa aunque el aviso no llegue.
 - Cada cobro aprobado suma 30 días al vencimiento, igual que `pagar_basico`/`pagar_pro` en `/super`. Cada evento se procesa una sola vez (tabla `pagos_eventos`), aunque el proveedor lo reenvíe.
 - Un pago fallido o una cancelación no quitan el acceso: el negocio queda vigente hasta su `vence` y después `vigente()` bloquea las reservas.
 - Stripe: crea un precio recurrente mensual por plan y pon su id en `STRIPE_PRICE_*`. Mercado Pago: la suscripción (`preapproval`) se crea con `PRECIO_*`. Eventos de Mercado Pago atendidos: `subscription_authorized_payment` (acredita) y `subscription_preapproval` (estado).

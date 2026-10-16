@@ -149,8 +149,13 @@ test('Mercado Pago: checkout, firma, cobro aprobado, repetición y rechazado', {
     return fetch(`${base}/webhooks/mercadopago?data.id=${id}&type=subscription_authorized_payment`, { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-signature': `ts=${ts},v1=${v1}`, 'x-request-id': rid }, body: JSON.stringify({ type: 'subscription_authorized_payment', data: { id } }) });
   };
-  assert.equal((await notifica(MP_OK, 'otro-secreto')).status, 400);
-  assert.equal((await fetch(`${base}/webhooks/mercadopago?data.id=${MP_OK}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
+  // Una firma que no coincide no bloquea el aviso (la clave de la app pudo cambiar), pero nada se acredita sin consultar
+  // a MP: un id que MP no conoce no hace nada, y un aviso sin id se rechaza.
+  const falsa = await notifica('9' + MP_OK, 'otro-secreto');
+  assert.equal(falsa.status, 200);
+  assert.equal((await falsa.json()).resultado, 'no_encontrado');
+  assert.equal((await plan(slug, cookie)).plan, 'prueba', 'un aviso con firma falsa no activa nada');
+  assert.equal((await fetch(`${base}/webhooks/mercadopago`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 400);
 
   assert.equal((await (await notifica(MP_NO)).json()).resultado, 'sin_aprobar');
   assert.equal((await plan(slug, cookie)).plan, 'prueba', 'un pago rechazado no activa nada');
