@@ -127,6 +127,7 @@ const listo = (async () => { // los módulos con tablas propias esperan a que te
   await pool.query('CREATE TABLE IF NOT EXISTS imagenes (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, tipo TEXT NOT NULL, ref TEXT NOT NULL, mime TEXT NOT NULL, data BYTEA NOT NULL, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS imagenes_ref ON imagenes(negocio_id, tipo, ref)');
   for (const c of ['lema', 'acerca', 'estacionamiento', 'zonas', 'instagram']) await pool.query(`ALTER TABLE negocios ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS terminos TIMESTAMPTZ');
   await pool.query('CREATE TABLE IF NOT EXISTS trabajos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, img INT NOT NULL, servicio_id INT, barbero TEXT, creado TIMESTAMPTZ DEFAULT now())');
   await pool.query('CREATE TABLE IF NOT EXISTS perfiles (negocio_id INT NOT NULL, barbero TEXT NOT NULL, especialidad TEXT, bio TEXT, instagram TEXT, PRIMARY KEY (negocio_id, barbero))');
   await pool.query('CREATE TABLE IF NOT EXISTS eventos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, titulo TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, descripcion TEXT, cupo INT, creado TIMESTAMPTZ DEFAULT now())');
@@ -202,7 +203,7 @@ app.post('/api/super/negocio/:id', superAuth, wrap(async (q, s) => {
   await pool.query(`UPDATE negocios SET ${A} WHERE id=$1`, [q.params.id]);
   s.json({ ok: true });
 }));
-const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks', 'onyx'];
+const RES = ['api', 'registro', 'img', 'i', 'health', 'admin', 'agenda', 'super', 'manifest', 'entrar', 'sitemap.xml', 'robots.txt', 'webhooks', 'onyx', 'terminos', 'privacidad', 'soporte'];
 app.post('/api/registro', wrap(async (q, s) => {
   if (limita('r' + q.ip, 5, 3600e3)) return s.status(429).json({ error: 'Demasiados registros. Intenta más tarde.' });
   const nombre = String(q.body.nombre || '').trim().slice(0, 60), slug = String(q.body.slug || '').toLowerCase(), pw = String(q.body.password || '');
@@ -212,7 +213,9 @@ app.post('/api/registro', wrap(async (q, s) => {
   if (!dueno || !correoOk(email)) return s.status(400).json({ error: 'Escribe tu nombre y un correo válido para tu cuenta' });
   const salt = crypto.randomBytes(8).toString('hex');
   try {
-    const r = await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,salt,hash,vence) VALUES($1,$2,$3,$4,$5,now()+interval '14 days') RETURNING id", [slug, nombre, wa(q.body.whatsapp) || null, salt, hashPass(pw, salt)]);
+    // terminos: cuándo aceptó los términos y el aviso de privacidad del SaaS (casilla del formulario de registro).
+    const r = await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,salt,hash,vence,terminos) VALUES($1,$2,$3,$4,$5,now()+interval '14 days',CASE WHEN $6 THEN now() END) RETURNING id",
+      [slug, nombre, wa(q.body.whatsapp) || null, salt, hashPass(pw, salt), q.body.acepta === true]);
     await seed(r.rows[0].id);
     const us = nuevoSalt(), u = await pool.query("INSERT INTO usuarios(negocio_id,nombre,email,salt,hash,rol) VALUES($1,$2,$3,$4,$5,'dueno') RETURNING id", [r.rows[0].id, dueno, email, us, hashPass(pw, us)]);
     await ponSesion(q, s, 'staff', u.rows[0].id, r.rows[0].id, slug);
@@ -721,9 +724,10 @@ const existe = async (q, s, n) => {
 const page = f => (q, s) => s.sendFile(f, { root: __dirname + '/public' });
 // Páginas con los precios de los planes: salen de PRECIO_BASICO / PRECIO_PRO (lo mismo que se cobra en billing.js).
 const PRECIOS = { BASICO: 399, PRO: 899 }; // si faltan las variables
+const sitio = require('./sitio')(app, { esc }); // /terminos y /privacidad del SaaS
 const conPrecios = f => { let t; return (q, s) => {
   t = t || require('fs').readFileSync(__dirname + '/public/' + f, 'utf8');
-  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])));
+  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace('__SOPORTE__', sitio.soporte()));
 }; };
 app.get('/', conPrecios('saas.html'));
 app.get('/registro', page('registro.html'));
@@ -732,7 +736,7 @@ app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/admin'));
 app.get('/sitemap.xml', wrap(async (q, s) => {
   const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
-  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
+  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', '/terminos', '/privacidad', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
 }));
 const temaEI = require('./tema-ei');
 const paginaEI = async (q, n) => {

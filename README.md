@@ -125,6 +125,16 @@ El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` +
 - **Rutas viejas:** el negocio se llamaba `onyx`; se renombra solo y `/onyx/...` y `/api/onyx/...` redirigen.
 - **Pendiente:** las referencias de estilo aún no se editan desde el panel, y los espacios de la agenda son por hora completa (el horario "9:30 AM" se muestra como texto, pero las citas empiezan a la hora en punto).
 
+## Términos, privacidad y soporte del SaaS
+
+`sitio.js` sirve las páginas legales del propio servicio (las de cada barbería para sus clientes están en `legal.js`):
+
+- `/terminos`: prueba de 14 días, precios (de `PRECIO_*`), cobro automático mensual con Mercado Pago, cancelación desde la pestaña Plan sin reembolso del periodo pagado, facturas, uso correcto y ley aplicable.
+- `/privacidad`: aviso de privacidad para los dueños que crean una cuenta (datos, finalidades, proveedores, derechos ARCO, cookies). Para los datos de los clientes de cada barbería el SaaS actúa como encargado.
+- Datos por variables: `SOPORTE_WHATSAPP` (también pone "Soporte por WhatsApp" en el pie de la página comercial), `SOPORTE_CORREO`, `SAAS_TITULAR` y `SAAS_DOMICILIO`. Sin ellas se muestra un texto genérico.
+- El registro pide aceptar ambos documentos y guarda la fecha en `negocios.terminos`.
+- Son textos orientativos: revísalos con un abogado o contador antes de vender a escala.
+
 ## Dónde alojarlo
 
 - **Ahora:** Railway, tal como está (se despliega solo con cada push a `main`). No hace falta nada más mientras no haya dominio propio.
