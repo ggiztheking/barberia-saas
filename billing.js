@@ -22,6 +22,8 @@ module.exports = (app, api, d) => {
     await pool.query(`CREATE TABLE IF NOT EXISTS suscripciones (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, proveedor TEXT NOT NULL, ref_externa TEXT NOT NULL, plan TEXT NOT NULL,
       estado TEXT NOT NULL DEFAULT 'activa', cliente_ref TEXT, creado TIMESTAMPTZ DEFAULT now(), actualizado TIMESTAMPTZ DEFAULT now(), UNIQUE (proveedor, ref_externa))`);
     await pool.query('CREATE INDEX IF NOT EXISTS suscripciones_neg ON suscripciones(negocio_id)');
+    // Cobros ya acreditados (30 días cada uno): permite revisar en MP sin depender del aviso y sin contar dos veces.
+    await pool.query('ALTER TABLE suscripciones ADD COLUMN IF NOT EXISTS cobros INT NOT NULL DEFAULT 0');
     await pool.query('CREATE TABLE IF NOT EXISTS pagos_eventos (proveedor TEXT NOT NULL, id_evento TEXT NOT NULL, tipo TEXT, negocio_id INT, creado TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (proveedor, id_evento))');
   })().catch(console.error);
 
@@ -156,7 +158,43 @@ module.exports = (app, api, d) => {
   };
   const refMP = ext => { const [n, p] = String(ext || '').split(':'); return { negId: Number(n), plan: p }; };
 
-  app.post('/webhooks/mercadopago', wrap(async (q, s) => {
+  // Lleva a la base el estado actual de una suscripción de MP y acredita 30 días por cada cobro que aún no se acreditó.
+  // Lo usan los avisos y la revisión directa (sincronizaMP), así que un cobro nunca se cuenta dos veces:
+  // MP reporta en summarized.charged_quantity cuántas cuotas lleva cobradas; si no lo trae, cuenta el cobro aprobado del aviso.
+  const aplicaMP = async (cl, ref, pre, cobroAprobado) => {
+    const { negId, plan } = refMP(pre.external_reference);
+    if (!PLANES.includes(plan) || !(await negocioExiste(cl, negId))) return 'ignorado';
+    const estado = ESTADO_MP[pre.status] || (cobroAprobado ? 'activa' : null);
+    if (!estado) return 'ignorado'; // sigue pendiente en MP: nada que hacer todavía
+    const r = await registra(cl, negId, 'mercadopago', ref, plan, estado, pre.payer_id && String(pre.payer_id));
+    const hechos = (await cl.query('SELECT cobros FROM suscripciones WHERE proveedor=$1 AND ref_externa=$2', ['mercadopago', ref])).rows[0].cobros;
+    const reporta = pre.summarized && Number(pre.summarized.charged_quantity);
+    const objetivo = Number.isInteger(reporta) ? Math.max(reporta, cobroAprobado && !hechos ? 1 : 0) : hechos + (cobroAprobado ? 1 : 0);
+    // El dinero ya se cobró: siempre suma sus días, aunque la suscripción esté cancelada o sobre.
+    for (let i = hechos; i < objetivo; i++) await acredita(cl, negId, plan);
+    if (objetivo > hechos) await cl.query('UPDATE suscripciones SET cobros=$3 WHERE proveedor=$1 AND ref_externa=$2', ['mercadopago', ref, objetivo]);
+    return r;
+  };
+  // Pregunta a MP por las suscripciones pendientes o vivas (de un negocio, o de todos): no depende de que llegue el aviso.
+  const sincronizaMP = async negId => {
+    if (!E.MP_ACCESS_TOKEN) return;
+    const subs = await Q(`SELECT ref_externa,negocio_id FROM suscripciones WHERE proveedor='mercadopago' AND ($1::int IS NULL OR negocio_id=$1)
+      AND (estado IN ('activa','pago_fallido','pausada') OR (estado='pendiente' AND creado > now() - interval '7 days'))`, [negId || null]);
+    for (const sub of subs) {
+      const pre = await mpGet('/preapproval/' + encodeURIComponent(sub.ref_externa));
+      if (!pre) continue;
+      const r = await enTx(cl => aplicaMP(cl, sub.ref_externa, pre, false));
+      await sobra(r, 'mercadopago', sub.ref_externa, sub.negocio_id);
+    }
+  };
+  setInterval(() => sincronizaMP().catch(e => console.error('revisión de Mercado Pago:', e.message)), 3600e3).unref();
+
+  app.post('/webhooks/mercadopago', (q, s, n) => {
+    // Deja rastro de cada aviso (sin datos del pagador) para poder confirmar en el log del servidor que MP sí avisa.
+    s.on('finish', () => console.log('mercadopago aviso:', JSON.stringify({ tipo: (q.body && q.body.type) || q.query.type || q.query.topic || null,
+      id: q.query['data.id'] ?? (q.body && q.body.data && q.body.data.id) ?? q.query.id ?? null, http: s.statusCode, firma: !!q.get('x-signature') })));
+    n();
+  }, wrap(async (q, s) => {
     if (!E.MP_WEBHOOK_SECRET || !firmaMP(q, E.MP_WEBHOOK_SECRET)) return s.status(400).json({ error: 'Firma no válida' });
     const tipo = String((q.body && q.body.type) || q.query.type || q.query.topic || ''), id = String(q.query['data.id'] ?? (q.body && q.body.data && q.body.data.id) ?? '');
     if (!/^[\w-]{1,64}$/.test(id)) return s.status(400).json({ error: 'Evento no válido' });
@@ -171,23 +209,15 @@ module.exports = (app, api, d) => {
       }
       const pre = await mpGet('/preapproval/' + encodeURIComponent(ap.preapproval_id));
       if (!pre) return s.json({ recibido: true, resultado: 'no_encontrado' });
-      const { negId, plan } = refMP(pre.external_reference);
-      const r = await unaVez('mercadopago', 'ap-' + id, tipo, async cl => {
-        if (!PLANES.includes(plan) || !(await negocioExiste(cl, negId))) return 'ignorado';
-        // El dinero ya se cobró: siempre suma sus días, aunque la suscripción esté cancelada o sobre.
-        await acredita(cl, negId, plan);
-        return registra(cl, negId, 'mercadopago', ap.preapproval_id, plan, ESTADO_MP[pre.status] || 'activa', pre.payer_id && String(pre.payer_id));
-      });
-      await sobra(r, 'mercadopago', ap.preapproval_id, negId);
+      const r = await unaVez('mercadopago', 'ap-' + id, tipo, cl => aplicaMP(cl, ap.preapproval_id, pre, true));
+      await sobra(r, 'mercadopago', ap.preapproval_id, refMP(pre.external_reference).negId);
       return s.json({ recibido: true, resultado: r });
     }
     if (tipo === 'subscription_preapproval') {
       const pre = await mpGet('/preapproval/' + encodeURIComponent(id));
       if (!pre) return s.json({ recibido: true, resultado: 'no_encontrado' });
-      const { negId, plan } = refMP(pre.external_reference), estado = ESTADO_MP[pre.status];
-      if (!estado || !PLANES.includes(plan)) return s.json({ recibido: true, resultado: 'ignorado' });
-      const r = await enTx(async cl => ((await negocioExiste(cl, negId)) ? registra(cl, negId, 'mercadopago', id, plan, estado, pre.payer_id && String(pre.payer_id)) : 'ignorado'));
-      await sobra(r, 'mercadopago', id, negId);
+      const r = await enTx(cl => aplicaMP(cl, id, pre, false));
+      await sobra(r, 'mercadopago', id, refMP(pre.external_reference).negId);
       return s.json({ recibido: true, resultado: r });
     }
     s.json({ recibido: true, resultado: 'ignorado' });
@@ -204,6 +234,11 @@ module.exports = (app, api, d) => {
   };
   const correoOk = c => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(c);
   api.get('/admin/plan', auth, wrap(async (q, s) => {
+    // Al volver del pago el panel consulta esto varias veces: se revisa en MP como mucho cada 20 s por negocio.
+    if (!limita('mps' + q.neg.id, 1, 20e3)) {
+      await sincronizaMP(q.neg.id).catch(e => console.error('revisión de Mercado Pago:', e.message));
+      q.neg = (await Q('SELECT * FROM negocios WHERE id=$1', [q.neg.id]))[0]; // pudo cambiar plan y vencimiento
+    }
     const n = q.neg, sub = (await Q(`SELECT proveedor,plan,estado FROM suscripciones WHERE negocio_id=$1 AND estado IN ('activa','pago_fallido','pausada','cancelada')
       ORDER BY (estado<>'cancelada') DESC, actualizado DESC LIMIT 1`, [n.id]))[0] || null;
     s.json({ plan: n.plan, vence: n.vence, activo: n.activo !== false, abierto: vigente(n), suscripcion: sub,

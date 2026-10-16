@@ -213,4 +213,21 @@ test('las rutas de plan exigen sesión', { skip: sinBase }, async () => {
   assert.equal((await fetch(`${base}/api/${slug}/admin/plan`)).status, 401);
   assert.equal((await fetch(`${base}/api/${slug}/admin/plan/checkout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
   assert.ok(cookie.includes('st_' + slug));
+
+  // Mercado Pago cobra pero su aviso no llega: al abrir el panel se le pregunta directo y se activa igual.
+  const negId = await negocioId(slug), C = 'pc_' + sufijo;
+  mp.ids.push(C);
+  assert.equal((await post(slug, cookie, 'checkout', { plan: 'pro', proveedor: 'mercadopago' })).status, 200);
+  mp.pre[C] = { status: 'authorized', external_reference: `${negId}:pro`, summarized: { charged_quantity: 1 } };
+  const a = await plan(slug, cookie), v1 = new Date(a.vence).getTime();
+  assert.equal(a.plan, 'pro');
+  assert.equal(a.suscripcion.estado, 'activa');
+  assert.ok(v1 > Date.now() + 40 * DIA && v1 < Date.now() + 46 * DIA, 'prueba restante (14) + 30 días');
+
+  // Si después sí llega el aviso del mismo cobro, no se cuenta dos veces; el cobro del mes siguiente sí suma.
+  assert.equal((await (await notificaMP(C, 'subscription_preapproval')).json()).resultado, 'ok');
+  assert.equal(new Date((await plan(slug, cookie)).vence).getTime(), v1);
+  mp.pre[C].summarized.charged_quantity = 2;
+  assert.equal((await (await notificaMP(C, 'subscription_preapproval')).json()).resultado, 'ok');
+  assert.ok(Math.abs(new Date((await plan(slug, cookie)).vence).getTime() - v1 - 30 * DIA) < 60e3);
 });
