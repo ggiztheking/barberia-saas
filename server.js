@@ -737,7 +737,7 @@ const sitio = require('./sitio')(app, { esc }); // /terminos y /privacidad del S
 const conPrecios = f => { let t; return (q, s) => {
   t = t || require('fs').readFileSync(__dirname + '/public/' + f, 'utf8');
   const base = (process.env.PUBLIC_URL || `${q.protocol}://${q.get('host')}`).replace(/\/$/, ''); // para canonical y vista previa en redes
-  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace(/__BASE__/g, base).replace('__SOPORTE__', sitio.soporte()));
+  s.type('html').send(t.replace(/__PRECIO_(BASICO|PRO)__/g, (m, p) => String(Number(process.env['PRECIO_' + p]) || PRECIOS[p])).replace(/__BASE__/g, base).replace('__SOPORTE__', sitio.soporte(f.endsWith('-en.html') ? 'en' : 'es')));
 }; };
 app.get('/', conPrecios('saas.html'));
 app.get('/en', conPrecios('saas-en.html')); // landing en inglés

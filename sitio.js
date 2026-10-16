@@ -17,7 +17,7 @@ module.exports = (app, d) => {
     return L.length ? L.join(' o ') : 'los medios de contacto publicados en la página principal';
   };
   // Enlace de soporte para el pie de la página comercial (vacío si no hay WhatsApp configurado).
-  const soporte = () => (wa() ? ` · <a href="https://wa.me/52${wa()}?text=${encodeURIComponent('Hola, tengo una duda sobre Agenda de Barberías')}" style="color:var(--gold)">Soporte por WhatsApp</a>` : '');
+  const soporte = (lang = 'es') => (wa() ? ` · <a href="https://wa.me/52${wa()}?text=${encodeURIComponent(lang === 'en' ? 'Hi, I have a question about Agenda de Barberías' : 'Hola, tengo una duda sobre Agenda de Barberías')}" style="color:var(--gold)">${lang === 'en' ? 'WhatsApp support' : 'Soporte por WhatsApp'}</a>` : '');
 
   const pagina = (titulo, desc, cuerpo) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(titulo)} · Agenda de Barberías</title><meta name="description" content="${esc(desc)}"><meta name="robots" content="index, follow"><meta name="theme-color" content="#07090f">
