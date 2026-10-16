@@ -200,7 +200,9 @@ $$('.rv').forEach(e=>io?io.observe(e):e.classList.add('in'));
 const lb=$('#lb');$$('.gl button').forEach(b=>b.onclick=()=>{const i=b.querySelector('img');$('#lbi').src=i.src;$('#lbi').alt=i.alt;lb.showModal?lb.showModal():0});
 $('#lbx').onclick=()=>lb.close();lb.onclick=e=>{if(e.target===lb)lb.close()};
 
-const hh=h=>String(h).padStart(2,'0')+':00';
+// Horas en formato de 12 h ("9:30 a. m."). La agenda puede ir cada 30 min y abrir a la media hora: el rango sale de i.horas.
+const h12=h=>{const H=+h.slice(0,2)%24;return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')},p2=h=>String(h).padStart(2,'0')+':00',mins=h=>+h.slice(0,2)*60+ +h.slice(3,5);
+const rango=i=>Array.isArray(i.horas)&&i.horas.length?{ini:i.horas[0],ult:i.horas[i.horas.length-1],fin:i.termina||p2(i.hora_fin+1)}:{ini:p2(i.hora_ini),ult:p2(i.hora_fin),fin:p2(i.hora_fin+1)};
 A('/info').then(i=>{
  INFO=i;pintaHorario();pintaTrab();const tt=/barber/i.test(i.nombre)?i.nombre:i.nombre+' · Barbería';document.title=tt;$('meta[property="og:title"]').content=tt;
  $('#logo').textContent=i.nombre;$('#fn-t').textContent=i.nombre+(i.direccion?' · '+i.direccion:'');$('#fpriv').href='/'+encodeURIComponent(N)+'/privacidad';
@@ -208,11 +210,11 @@ A('/info').then(i=>{
  $('#dir').textContent=i.direccion||'Consulta cómo llegar';
  const w=i.whatsapp?'https://wa.me/'+i.whatsapp+'?text='+encodeURIComponent('Hola, quiero información de '+i.nombre):'';
  $$('.wa').forEach(a=>w?a.href=w:a.hidden=true);$$('.mp').forEach(a=>i.maps?a.href=i.maps:a.hidden=true);
- if(i.hora_ini!=null&&i.hora_fin!=null){$('#hf').textContent='Citas de '+hh(i.hora_ini)+' a '+hh(i.hora_fin);$('#hf').hidden=false}
+ if(i.hora_ini!=null&&i.hora_fin!=null){const r=rango(i);$('#hf').textContent='Citas de '+h12(r.ini)+' a '+h12(r.ult);$('#hf').hidden=false}
 
- // estado del día según el horario de citas (hora de Mérida)
- if(i.hora_ini!=null&&i.hora_fin!=null){const h=+new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hour12:false,timeZone:'America/Merida'}).format(new Date())%24,dw=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Merida'})).getDay(),cz=(i.cierra||'').split(',').includes(String(dw)),on=!cz&&h>=i.hora_ini&&h<=i.hora_fin;
-  $('#ab').className='badge'+(on?' on':'');$('#ab').querySelector('span').textContent=on?'Abierto ahora · última cita a las '+hh(i.hora_fin):cz?'Hoy cerramos · agenda para otro día':'Fuera de horario · agenda para mañana';$('#ab').hidden=false}
+ // estado del día según el horario de citas (hora de Mérida, con minutos: abre 9:30 → a las 9:15 aún no)
+ if(i.hora_ini!=null&&i.hora_fin!=null){const r=rango(i),t=mins(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'America/Merida'}).format(new Date())),dw=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Merida'})).getDay(),cz=(i.cierra||'').split(',').includes(String(dw)),on=!cz&&t>=mins(r.ini)&&t<mins(r.fin);
+  $('#ab').className='badge'+(on?' on':'');$('#ab').querySelector('span').textContent=on?'Abierto ahora · última cita a las '+h12(r.ult):cz?'Hoy cerramos · agenda para otro día':'Fuera de horario · agenda para mañana';$('#ab').hidden=false}
  const pt=i.portada?'/i/'+i.portada:i.fotos?'/img/hero.jpg':'';if(pt){$('#hero').classList.add('f');$('#himg').src=pt;$('#hero').style.setProperty('--hbg','url('+pt+')')}if(i.fotos){$('#local').hidden=false;$('#nl').hidden=false}
  FOTOS=i.fotos_barberos||{};pintaEquipo();
  $$('.bar .ag').forEach(a=>a.href='/'+N+'/agenda');
@@ -237,8 +239,8 @@ $$('#tw button').forEach(b=>b.onclick=()=>galeria(L.map(capTrab),+b.dataset.i,ag
 if(L.length>12){$('#tw-mas').hidden=false;$('#tw-mas').textContent='Ver las '+L.length+' fotos';$('#tw-mas').onclick=()=>galeria(L.map(capTrab),12,ag)}}
 A('/trabajos').then(t=>{TRB=Array.isArray(t)?t:[];pintaEquipo();pintaTrab()}).catch(()=>{});
 const DS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-function pintaHorario(){if(!INFO)return;const c=(INFO.cierra||'').split(','),hoyD=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Merida'})).getDay(),o=[1,2,3,4,5,6,0];
-$('#hr').innerHTML=o.map(d=>{const z=c.includes(String(d));return `<li class="${d===hoyD?'hoy':''} ${z?'cz':''}"><span>${DS[d]}${d===hoyD?' · hoy':''}</span><span>${z?'Cerrado':hh(INFO.hora_ini)+' – '+hh(INFO.hora_fin+1)}</span></li>`}).join('')}
+function pintaHorario(){if(!INFO)return;const c=(INFO.cierra||'').split(','),r=rango(INFO),hoyD=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Merida'})).getDay(),o=[1,2,3,4,5,6,0];
+$('#hr').innerHTML=o.map(d=>{const z=c.includes(String(d));return `<li class="${d===hoyD?'hoy':''} ${z?'cz':''}"><span>${DS[d]}${d===hoyD?' · hoy':''}</span><span>${z?'Cerrado':h12(r.ini)+' – '+h12(r.fin)}</span></li>`}).join('')}
 function pintaEquipo(){if(!INFO||!PAG)return;
 $('#team').innerHTML=PAG.perfiles.map(p=>{const b=p.barbero,f=FOTOS[b];return `<div class="bar">${f?`<div class="m" style="background:center/cover no-repeat url(/i/${Number(f)});color:transparent">${esc(b.trim().charAt(0))}</div>`:`<div class="m">${esc(b.trim().charAt(0).toUpperCase())}</div>`}<h3>${esc(b)}</h3>${p.especialidad?`<p class="es">${esc(p.especialidad)}</p>`:''}${p.bio?`<p class="bio">${esc(p.bio)}</p>`:''}${p.instagram?`<a class="ig" href="https://instagram.com/${encodeURIComponent(p.instagram)}" rel="noopener" target="_blank">@${esc(p.instagram)}</a>`:''}${nt(b)}<a class="ag" href="/${N}/agenda?barbero=${encodeURIComponent(b)}">Agendar con ${esc(b.split(' ')[0])}</a></div>`}).join('');
 $$('#team [data-tb]').forEach(x=>x.onclick=()=>{const b=x.dataset.tb;galeria(TRB.filter(t=>t.barbero===b).map(capTrab),0,{accion:'Agendar con '+b.split(' ')[0],fn:()=>location.href='/'+N+'/agenda?barbero='+encodeURIComponent(b)})})}

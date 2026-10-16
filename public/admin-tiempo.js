@@ -5,7 +5,7 @@
   const SEG = [['todos', 'Todos mis clientes'], ['frecuente', 'Frecuentes'], ['vip', 'VIP'], ['riesgo', 'En riesgo (30 a 89 días sin venir)'], ['perdido', 'Perdidos (90 días o más)'], ['nuevo', 'Nuevos'], ['cumple', 'Cumpleañeros del mes'], ['prospecto', 'Prospectos']];
   const S = { dias: 7, semanas: 8, sel: {}, promo: null, H: null, PT: null, IN: null, el: null };
   const hh = h => { const x = +h.slice(0, 2); return `${x % 12 || 12}:${h.slice(3, 5)} ${x < 12 ? 'a. m.' : 'p. m.'}`; };
-  const corta = h => { const x = +h.slice(0, 2); return (x % 12 || 12) + (x < 12 ? 'a' : 'p'); };
+  const corta = h => { const x = +h.slice(0, 2); return (x % 12 || 12) + (h.slice(3, 5) !== '00' ? ':' + h.slice(3, 5) : '') + (x < 12 ? 'a' : 'p'); }; // 9a, 9:30a
   const fecha = (f, hoy) => { const d = new Date(f + 'T12:00'), m = new Date(hoy + 'T12:00'); m.setDate(m.getDate() + 1);
     const t = d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' }).replace(/^./, c => c.toUpperCase());
     return f === hoy ? 'Hoy · ' + t : f === m.toLocaleDateString('en-CA') ? 'Mañana · ' + t : t; };

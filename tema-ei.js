@@ -28,7 +28,14 @@ module.exports = d => {
   const titulo = `${n.nombre}${/barber/i.test(n.nombre) ? '' : ' | Barbería'}${ciudad}`;
   const descr = `${n.lema ? n.lema + ' ' : ''}${desde !== null ? `Cortes desde ${money(desde)}, paquetes` : 'Cortes y paquetes'} y reservas en línea.${n.direccion ? ' ' + n.direccion + '.' : ''} ${horario}.`.replace(/\s+/g, ' ').trim();
   const og = hero ? base + hero : '';
-  const ia = referencias.some(r => /\bIA\b/i.test(r.etiqueta || ''));
+  // Referencias de estilo: ya vienen en el orden que eligió el dueño. La leyenda de IA sale solo en las marcadas.
+  // Solo la marca `ia` decide (o la leyenda vieja exacta, por si la migración aún no corrió): una etiqueta como
+  // "Foto real, sin IA" no debe hacer que la página diga que las fotos son de IA.
+  const LEYENDA = 'Referencia generada con IA', vieja = t => String(t || '').trim().toLowerCase() === LEYENDA.toLowerCase();
+  const esIA = r => !!r.ia || vieja(r.etiqueta), nIA = referencias.filter(esIA).length;
+  const etiquetaRef = r => !esIA(r) ? r.etiqueta || '' : !r.etiqueta || vieja(r.etiqueta) ? LEYENDA : /generad[ao]s? con IA/i.test(r.etiqueta) ? r.etiqueta : `${r.etiqueta} · Generada con IA`;
+  const avisoIA = !nIA ? 'Referencias para inspirarte. ' : nIA === referencias.length ? 'Estas imágenes son referencias generadas con IA. No son trabajos realizados por nuestra barbería. '
+    : 'Las imágenes marcadas como generadas con IA no son trabajos realizados por nuestra barbería. ';
   const premium = paquetes.length >= 3 ? paquetes.reduce((a, p) => (+p.precio > +a.precio ? p : a), paquetes[0]).id : null;
 
   const ld = [{ '@context': 'https://schema.org', '@type': 'BarberShop', name: n.nombre, url, ...(og ? { image: og } : {}), description: descr,
@@ -49,10 +56,10 @@ ${extras.map(e => `<label class="extra"><input type="checkbox" data-id="${e.id}"
 <a class="button" id="ir" href="${agenda}?servicio=${paquetes[0].id}">Reservar mi paquete ↗</a>${n.whatsapp ? `<a class="alt-wa" id="wa" rel="noopener noreferrer" target="_blank" href="${esc(whatsappUrl)}">¿Prefieres reservar por WhatsApp?</a>` : ''}</div></div>` : '';
 
   const estilos = referencias.length ? `<section class="section dark" id="estilos"><div class="heading"><div><p class="eyebrow">02 / INSPIRACIÓN PARA TU PRÓXIMO CORTE</p><h2>Encuentra<br><em>tu siguiente estilo.</em></h2></div>
-<p>${ia ? 'Estas imágenes son referencias generadas con IA. No son trabajos realizados por nuestra barbería. ' : 'Referencias para inspirarte. '}El resultado se adapta a tu cabello.</p></div>
-<div class="filters" aria-label="Filtrar referencias"><button type="button" class="selected" aria-pressed="true" data-f="todos">Todos</button>${referencias.map(r => `<button type="button" aria-pressed="false" data-f="${r.id}">${esc(r.nombre)}</button>`).join('')}</div>
-<div class="styles">${referencias.map(r => `<article data-s="${r.id}">${r.img ? `<button type="button" class="image-button" data-src="/i/${r.img}" data-cap="${esc(r.nombre + (r.etiqueta ? ' · ' + r.etiqueta : ''))}" aria-label="Ampliar ${esc(r.nombre)}"><img src="/i/${r.img}" alt="Referencia de ${esc(r.nombre.toLowerCase())}" loading="lazy" decoding="async"></button>` : ''}
-<div class="style-copy"><span class="eyebrow">${esc(r.etiqueta ? r.etiqueta : 'REFERENCIA DE ESTILO').toUpperCase()}</span><h3>${esc(r.nombre)}</h3><p>${esc(r.descripcion)}</p>${paquetes[0] ? `<a href="${agenda}?servicio=${paquetes[0].id}">Quiero este estilo · ${money(paquetes[0].precio)} ↗</a>` : ''}</div></article>`).join('')}</div>
+<p>${avisoIA}El resultado se adapta a tu cabello.</p></div>
+${referencias.length >= 2 && referencias.length <= 8 ? `<div class="filters" aria-label="Filtrar referencias"><button type="button" class="selected" aria-pressed="true" data-f="todos">Todos</button>${referencias.map(r => `<button type="button" aria-pressed="false" data-f="${Number(r.id)}">${esc(r.nombre)}</button>`).join('')}</div>` : ''}
+<div class="styles">${referencias.map(r => { const et = etiquetaRef(r); return `<article data-s="${Number(r.id)}">${r.img ? `<button type="button" class="image-button" data-src="/i/${Number(r.img)}" data-cap="${esc(r.nombre + (et ? ' · ' + et : ''))}" aria-label="Ampliar ${esc(r.nombre)}"><img src="/i/${Number(r.img)}" alt="Referencia de ${esc(String(r.nombre).toLowerCase())}" loading="lazy" decoding="async"></button>` : ''}
+<div class="style-copy"><span class="eyebrow">${esc(String(et || 'Referencia de estilo').toUpperCase())}</span><h3>${esc(r.nombre)}</h3>${r.descripcion ? `<p>${esc(r.descripcion)}</p>` : ''}${paquetes[0] ? `<a href="${agenda}?servicio=${paquetes[0].id}">Quiero este estilo · ${money(paquetes[0].precio)} ↗</a>` : ''}</div></article>`; }).join('')}</div>
 <dialog class="lightbox" id="lb"><button type="button" class="button" id="lb-x">Cerrar ×</button><img id="lb-img" alt=""><p id="lb-cap"></p></dialog></section>` : '';
 
   const espacio = n.fotos ? `<section class="section space" id="espacio"><div class="heading"><div><p class="eyebrow">03 / ESTE ES NUESTRO ESPACIO</p><h2>Tu momento.<br><em>Nuestra barbería.</em></h2></div><p>${esc(n.nombre)} por dentro.<br>Fotografías reales de nuestro local.</p></div>

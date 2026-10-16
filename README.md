@@ -123,7 +123,7 @@ El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` +
 - **Reservar:** "Reservar" abre la agenda con `?servicio=<id>&extras=<ids>`. El precio final lo calcula siempre el servidor; un extra de lavado no se cobra si el paquete ya lo incluye. La cita guarda `"Paquete + Extra"` en `servicio`, y las estadísticas agrupan por el nombre base.
 - **Estilo Internacional** trae su catálogo real, sembrado una sola vez al arrancar (4 paquetes, 3 extras y 6 referencias de estilo). Las referencias se marcan como generadas con IA porque no son trabajos de la barbería.
 - **Rutas viejas:** el negocio se llamaba `onyx`; se renombra solo y `/onyx/...` y `/api/onyx/...` redirigen.
-- **Pendiente:** las referencias de estilo aún no se editan desde el panel, y los espacios de la agenda son por hora completa (el horario "9:30 AM" se muestra como texto, pero las citas empiezan a la hora en punto).
+- Las referencias de estilo se editan desde Panel → Página, y la agenda puede ser cada 30 minutos y abrir a la media hora (ver las secciones más abajo).
 
 ## Términos, privacidad y soporte del SaaS
 
@@ -134,6 +134,99 @@ El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` +
 - Datos por variables: `SOPORTE_WHATSAPP` (también pone "Soporte por WhatsApp" en el pie de la página comercial), `SOPORTE_CORREO`, `SAAS_TITULAR` y `SAAS_DOMICILIO`. Sin ellas se muestra un texto genérico.
 - El registro pide aceptar ambos documentos y guarda la fecha en `negocios.terminos`.
 - Son textos orientativos: revísalos con un abogado o contador antes de vender a escala.
+
+## Página comercial bilingüe (`/` y `/en`)
+
+- `/` sirve `public/saas.html` (español de México) y `/en` sirve `public/saas-en.html` (inglés). Las dos pasan por `conPrecios` en `server.js`, que reemplaza `__PRECIO_BASICO__`, `__PRECIO_PRO__`, `__BASE__` y `__SOPORTE__`. En `/en` el enlace de soporte por WhatsApp sale en inglés con `soporte('en')` de `sitio.js`.
+- **SEO:** cada página tiene su canonical (`/` y `/en`), su `og:locale` (`es_MX` / `en_US`) con la alternativa del otro idioma y su JSON-LD en su idioma: `SoftwareApplication` con precios en MXN y `FAQPage`. Las dos llevan `<link rel="alternate" hreflang>`: `es-MX` → `/`, `en` → `/en` y `x-default` → `/`.
+- **Selector de idioma ES/EN** en el encabezado y en el pie, con `aria-current="page"` en el idioma actual.
+- En inglés, los enlaces a páginas que solo existen en español (`/registro`, `/terminos`, `/privacidad`, `/estilo-internacional`) llevan `hreflang="es"` y la nota "(in Spanish)".
+- **Imágenes:**
+  - Reales: `public/img/landing/m-*.jpg` y `d-pagina.jpg` son capturas de Estilo Internacional, y `hero.jpg`, `vip.jpg` y `recepcion.jpg` son fotos del local.
+  - Generadas con IA: `ia-*.jpg` (fade, cliente, navaja, dueño, herramientas) son **ilustraciones**. Su texto alternativo lo dice, nunca se atribuyen a la barbería ni a un cliente, y cada sección donde aparecen lleva el crédito "Imágenes ilustrativas generadas con IA" / "Illustrative AI-generated images".
+- **Al cambiar el texto de la landing, cambia los dos archivos.** Tienen la misma estructura de secciones; la versión en inglés tiene una pregunta frecuente más. El servidor guarda el HTML en memoria la primera vez que lo lee: reinícialo para ver los cambios.
+- **"Entrar a mi panel"** abre una ventana (`<dialog>`) y lleva a `/<slug>/admin`. Acepta:
+  - el enlace de la barbería;
+  - la dirección completa pegada;
+  - el nombre con acentos o espacios ("Barbería José" → `barberia-jose`, igual que el enlace que propone el registro).
+
+  Si no sale ningún enlace, avisa en lugar de quedarse sin hacer nada.
+- **Pruebas:** `test/landing.test.js` revisa:
+  - estado 200, idioma, hreflang y selector de idioma;
+  - precios, que no queden marcadores y que el JSON-LD sea válido;
+  - que existan todas las imágenes y que las de IA lleven su crédito;
+  - la lógica de "Entrar a mi panel".
+
+## Agenda: citas cada hora o cada 30 minutos
+
+Cada barbería decide cada cuánto se pueden apartar citas y si abre en punto o a la media hora. Se configura en **Panel → Ajustes → Horario de citas**, que solo ve el dueño.
+
+- **Columnas en `negocios`:** `intervalo` (60 por defecto o 30) y `abre_min` (0 por defecto o 30). Se crean al arrancar con `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Con 60 y 0 la agenda funciona igual que antes, con horas completas.
+- **Espacios del día (`todas(n)` en `server.js`):** empiezan en `hora_ini:abre_min` y avanzan de `intervalo` en `intervalo` mientras su hora sea menor o igual a `hora_fin` (la «última cita»). Ejemplos:
+  - Cada 30 min, de 9 a 19: 9:00, 9:30 … 19:30.
+  - Cada 30 min abriendo 9:30: 9:30, 10:00 … 19:30.
+  - Cada hora abriendo 9:30: 9:30, 10:30 … 19:30.
+- **Una cita ocupa un espacio.** `ranura(n, hora)` da el espacio que contiene una hora. Por eso una cita registrada a mano a las 10:17, o una de cuando la agenda era por hora, ocupa el espacio donde cae. Las citas que ya existían siguen siendo válidas.
+- **Bloqueos:** un bloqueo con hora tapa solo ese espacio. Un bloqueo sin hora tapa todo el día.
+- **Horas pasadas:** `pasada(fecha, hora)` compara con los minutos actuales de Mérida (`ahoraM()`). A las 10:15 ya pasó el espacio de las 10:00, pero no el de las 10:30.
+- **Reservas:** `POST /citas` y `/reprogramar` solo aceptan un espacio exacto del horario. Rechazan con 409 lo que `ocupadas()` marca como ocupado, igual que `/horarios`. `POST /admin/cita` admite cualquier hora (por ejemplo, «ahora · ya llegó»), pero no permite dos citas pendientes en el mismo espacio del mismo barbero.
+- **Agenda llena (`tiempo.js`):** recibe `todas`, `ranura` y `pasada` de `server.js`. Así «libre» significa exactamente lo mismo que en la agenda del cliente.
+- **Rutas:**
+  - `GET /api/:slug/info` y `GET /admin/ajustes` ahora también devuelven `intervalo`, `abre_min`, `horas` (los espacios del día) y `termina` (cuándo acaba el último espacio).
+  - `GET /admin/agenda/config` y `POST /admin/agenda/config` (`{ intervalo: 30|60, abre_min: 0|30 }`): solo el dueño. Un barbero recibe 403 y un valor inválido, 400.
+- **Pantallas:** la agenda del cliente, la página del negocio y el panel muestran las horas en formato de 12 h («9:30 a. m.»).
+- **Pruebas:** `test/agenda.test.js`.
+
+**Notas de la revisión:**
+- **Patrón histórico (Agenda llena):** si dos citas caen en el mismo espacio (por ejemplo, un «no llegó» a las 10:00 y alguien sin cita que llegó a las 10:20), las dos ocupan ese espacio y la inasistencia se sigue contando.
+- **Panel, agenda del día:** «Siguiente» toma el espacio que contiene la hora actual según el horario de la barbería. Con «cada hora a la media hora», la cita de las 9:30 sigue siendo la siguiente a las 10:15.
+- **Cambios que endurecen la regla, también con intervalo 60:** `POST /citas` y `/reprogramar` ya no aceptan horas fuera de los espacios (antes se colaba «10:30» en una agenda por hora). Una cita registrada a una hora que no es en punto («ahora · ya llegó» a las 10:17) ahora ocupa su espacio, que de todos modos ya pasó.
+
+## Referencias de estilo editables
+
+- **Referencias de estilo (editables):** se editan en la pestaña **Página** del panel → "Referencias de estilo" (`public/admin-referencias.js`). Son filas de `estilos` con `tipo='referencia'`. Además tienen `orden` (su lugar en la página) e `ia` (la marca "generada con IA"). Su foto es una fila de `imagenes` con `tipo='servicio'` y `ref` = id del estilo. El dueño puede:
+  - crear o editar con `POST /api/:slug/admin/referencia` `{id?, nombre (40), descripcion (160), etiqueta? (40), ia}`;
+  - listar con `GET /api/:slug/admin/referencias`;
+  - borrar con `POST /api/:slug/admin/referencia/borrar` `{id}` (también borra la foto);
+  - reordenar con `POST /api/:slug/admin/referencias/orden` `{ids:[...]}` (la lista completa de sus referencias, en el orden nuevo);
+  - subir o cambiar la foto con `POST /api/:slug/admin/referencia/foto` `{id, data:'data:image/jpeg;base64,...'}`. Solo acepta JPG (se comprueba por sus bytes `FF D8 FF`) de 750 KB como máximo, y el panel la achica a 1200 px antes de subirla. Si llegan dos subidas a la vez para la misma referencia, una responde 409;
+  - quitar la foto con `POST /api/:slug/admin/referencia/foto/borrar` `{id}`.
+- Máximo 24 referencias por barbería. Solo el dueño puede editarlas: el barbero recibe 403 y sin sesión la respuesta es 401.
+- En la página con el tema Estilo Internacional salen en el orden elegido. La leyenda "Referencia generada con IA" aparece solo en las que tienen la marca `ia`; una etiqueta que mencione "IA" no basta. El aviso del encabezado cambia según el caso: todas de IA, una mezcla o ninguna. Los botones de filtro salen solo con 2 a 8 referencias. Sin referencias no aparecen ni la sección ni su enlace en el menú.
+- **Migración:** al arrancar, la leyenda vieja escrita en `etiqueta` ("Referencia generada con IA") se convierte en `ia=true` y la etiqueta queda vacía. Es idempotente, así que las 6 referencias sembradas de Estilo Internacional se ven igual y no se duplican.
+- Pruebas: `test/referencias.test.js`.
+
+## Programa de lealtad (tarjeta de sellos)
+
+Pestaña **Clientes** del panel, sección "Tarjeta de sellos". Ayuda a que los clientes regresen: cada visita atendida suma un sello y al juntar las visitas que pide el programa el cliente gana su premio.
+
+**Reglas**
+- Una visita es una cita en estado `completada`. Las citas pendientes, canceladas o en las que el cliente no llegó (`no_llego`) no cuentan.
+- Solo cuentan las visitas con fecha igual o posterior a la **fecha de inicio** del programa y posteriores al **último premio canjeado** por ese cliente. Al registrar un premio, su conteo vuelve a cero.
+- Se identifica al cliente por su teléfono: los últimos 10 dígitos, así que `+52 999 111 0001`, `529991110001` y `999-111-0001` son la misma persona. Las citas sin un teléfono de 10 dígitos no entran al programa.
+- El número de visitas para el premio va de 3 a 20. Si el programa está activo, hay que escribir cuál es el premio (máximo 120 caracteres). La fecha de inicio no puede ser futura; si no se indica, empieza hoy.
+- El premio solo se registra si el cliente ya juntó las visitas y el programa está activo. Si se da clic dos veces, no se registra dos veces.
+
+**Rutas del dueño** (un barbero recibe 403)
+- `GET /api/:slug/admin/lealtad/config`: devuelve `{activo, cada, premio, desde, min, max, hoy}`.
+- `POST /api/:slug/admin/lealtad/config` con `{activo, cada, premio, desde}`: se puede mandar solo lo que cambia; lo demás se conserva.
+- `GET /api/:slug/admin/lealtad/clientes`: devuelve `{config, resumen:{clientes, listos, canjes}, clientes:[{tel, nombre, visitas, faltan, listo, ultima, canjes, ultimos:[{fecha, nota}], wa}]}`. Aparecen primero los clientes listos para su premio y después los que están más cerca. `wa` es un enlace de WhatsApp (wa.me) con el mensaje sugerido: "te faltan N visitas para tu premio" o "¡ya ganaste tu premio…!".
+- `POST /api/:slug/admin/lealtad/canje` con `{telefono, nota}`: registra el premio entregado con la fecha de hoy en Mérida. Responde 400 si al cliente le faltan visitas o si el programa está apagado.
+
+**Ruta pública**
+- `GET /api/:slug/lealtad?tel=XXXXXXXXXX` devuelve solo `{activo, cada, premio, visitas, faltan}` de ese teléfono, sin nombres ni datos de otros clientes. Si el programa está apagado devuelve `{activo:false}`. Admite 30 consultas cada 10 minutos por IP y no se guarda en caché. La idea es mostrarlo más adelante en la agenda del cliente.
+
+**Tablas**
+- `lealtad_config(negocio_id PK, activo, cada, premio, desde, actualizado)`
+- `lealtad_canjes(id, negocio_id, telefono, fecha, nota, visitas, creado)`, con un índice en `(negocio_id, telefono, fecha)`.
+
+**Pruebas:** `node --test test/lealtad.test.js`
+
+**Notas de la revisión:**
+- En `GET /api/:slug/admin/lealtad/clientes`, `wa` es `null` si el programa está apagado o no tiene premio, y el panel oculta entonces el botón "Enviar por WhatsApp". Así no se le promete al cliente un premio que no existe.
+- Si el programa nunca se configuró, la lista del dueño cuenta las visitas desde hoy, que es la fecha que tomará al activarse sin indicar otra. Para darle crédito a clientes de antes, hay que elegir una fecha de inicio pasada.
+- El enlace a la agenda dentro del mensaje usa PUBLIC_URL sin la diagonal final.
+- Pendiente conocido: al registrar el premio, las visitas que pasen de las requeridas no se guardan para la siguiente tarjeta.
 
 ## Dónde alojarlo
 

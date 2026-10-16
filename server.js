@@ -60,7 +60,22 @@ const cierraSesion = async (q, s, tipo) => {
 setInterval(() => pool.query('DELETE FROM sesiones WHERE expira<now()').catch(() => {}), 3600e3).unref();
 const wa = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 10 ? '52' + d : d; };
 const vigente = n => n.activo !== false && (!n.vence || new Date(n.vence) >= new Date());
-const todas = n => Array.from({ length: n.hora_fin - n.hora_ini + 1 }, (_, k) => String(n.hora_ini + k).padStart(2, '0') + ':00');
+// ---- Espacios de la agenda. intervalo: 60 (cada hora, por defecto) o 30 minutos; abre_min: 0 o 30 (abre a la media hora, p. ej. 9:30).
+// Los espacios van de hora_ini:abre_min en adelante, de intervalo en intervalo, mientras su hora sea <= hora_fin ("última cita").
+// Con intervalo 60 y abre_min 0 salen las horas completas de siempre ("10:00", "11:00"...).
+const aMin = h => +String(h).slice(0, 2) * 60 + +String(h).slice(3, 5);
+const hhmm = t => String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+const paso = n => (+n.intervalo === 30 ? 30 : 60);
+const abreMin = n => (+n.abre_min === 30 ? 30 : 0);
+const todas = n => { const r = []; for (let t = n.hora_ini * 60 + abreMin(n); Math.floor(t / 60) <= n.hora_fin && t < 1440; t += paso(n)) r.push(hhmm(t)); return r; };
+// El espacio que contiene una hora: una cita a mano "ahora" (10:17) o de un horario anterior ocupa el espacio donde cae. null si queda fuera del horario.
+const ranura = (n, h) => {
+  if (!/^\d{2}:\d{2}$/.test(String(h || ''))) return null;
+  const t = aMin(h), p = paso(n);
+  return todas(n).find(s => t >= aMin(s) && t < aMin(s) + p) || null;
+};
+// Lo que el cliente y el panel necesitan para dibujar la agenda: los espacios del día y a qué hora termina el último.
+const horarioAgenda = n => { const h = todas(n); return { intervalo: paso(n), abre_min: abreMin(n), horas: h, termina: h.length ? hhmm(aMin(h[h.length - 1]) + paso(n)) : null }; };
 const cerrado = (n, f) => (n.cierra || '').split(',').includes(String(new Date(f + 'T12:00').getDay()));
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const avisa = (n, d) => {
@@ -81,11 +96,16 @@ const avisa = (n, d) => {
     fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, negocio: n.nombre, slug: n.slug, avisar_a: tel, avisar_correo: directo ? '' : correo, asunto, mensaje: txt }) }).catch(e => console.error('make:', e.message));
 };
 const ahoraH = () => +new Date().toLocaleString('en-US', { timeZone: 'America/Merida', hour: '2-digit', hourCycle: 'h23' });
+// Minutos transcurridos del día en Mérida (10:15 → 615).
+const ahoraM = () => { const [h, m] = new Date().toLocaleTimeString('en-US', { timeZone: 'America/Merida', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).split(':'); return (+h % 24) * 60 + +m; };
+// Un espacio ya pasó si es de un día anterior o si hoy ya empezó (a las 10:15 ya pasó el de las 10:00, no el de las 10:30).
+const pasada = (f, h) => f < HOY() || (f === HOY() && aMin(h) <= ahoraM());
+// Espacios ocupados de un barbero en un día: cada cita viva o bloqueo ocupa el espacio que lo contiene; día cerrado o bloqueo sin hora = todo.
 const ocupadas = async (n, fecha, barbero) => {
   if (cerrado(n, fecha)) return new Set(todas(n));
   const r = await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [n.id, fecha, barbero]);
   const b = await pool.query('SELECT hora FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3', [n.id, fecha, barbero]);
-  return b.rows.some(x => x.hora === null) ? new Set(todas(n)) : new Set([...r.rows, ...b.rows].map(x => x.hora));
+  return b.rows.some(x => x.hora === null) ? new Set(todas(n)) : new Set([...r.rows, ...b.rows].map(x => ranura(n, x.hora) || x.hora));
 };
 const elige = async (n, fecha, hora) => { for (const b of bars(n)) if (!(await ocupadas(n, fecha, b)).has(hora)) return b; return null; };
 const bars = n => n.barberos.split(',').map(x => x.trim()).filter(Boolean);
@@ -148,6 +168,9 @@ const listo = (async () => { // los módulos con tablas propias esperan a que te
   await pool.query('CREATE TABLE IF NOT EXISTS fijos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, concepto TEXT NOT NULL, categoria TEXT NOT NULL, monto NUMERIC(12,2) NOT NULL, dia INT DEFAULT 1)');
   for (const r of (await pool.query('SELECT id FROM negocios n WHERE NOT EXISTS (SELECT 1 FROM preguntas p WHERE p.negocio_id=n.id)')).rows) await seedPreg(r.id);
   await pool.query('CREATE TABLE IF NOT EXISTS bloqueos (id SERIAL PRIMARY KEY, negocio_id INT NOT NULL, barbero TEXT NOT NULL, fecha DATE NOT NULL, hora TEXT, motivo TEXT)');
+  // Agenda: citas cada 60 (por defecto, igual que antes) o 30 minutos, y apertura a la hora en punto (0) o a la media hora (30).
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS intervalo INT DEFAULT 60');
+  await pool.query('ALTER TABLE negocios ADD COLUMN IF NOT EXISTS abre_min INT DEFAULT 0');
   // Onyx ya no existe: el negocio principal es Estilo Internacional. Si quedó guardado como 'onyx', se renombra (las rutas viejas redirigen).
   await pool.query("UPDATE negocios SET slug=$1 WHERE slug='onyx' AND NOT EXISTS (SELECT 1 FROM negocios WHERE slug=$1)", [PRINCIPAL]);
   let o = (await pool.query('SELECT id FROM negocios WHERE slug=$1', [PRINCIPAL])).rows[0];
@@ -466,7 +489,7 @@ require('./billing')(app, api, { pool, auth, wrap, limita, vigente });
 const paq = require('./paquetes')(app, api, { pool, auth, wrap, listo, PRINCIPAL });
 require('./marketing')(app, api, { pool, auth, wrap, HOY, limita, listo });
 require('./contabilidad')(app, api, { pool, auth, wrap, HOY, limita, listo });
-require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10, todas, cerrado, bars, ahoraH, vigente });
+require('./tiempo')(app, api, { pool, auth, wrap, HOY, limita, listo, tel10, todas, cerrado, bars, ahoraH, vigente, ranura, pasada });
 require('./legal')(app, api, { pool, auth, wrap, HOY, limita, listo });
 require('./lealtad')(app, api, { pool, auth, wrap, HOY, limita, listo });
 const LISTO = Promise.all([listo, paq.listo]); // los arranques que fallan ya registran su error y no bloquean
@@ -546,7 +569,7 @@ api.post('/admin/imagen/borrar', auth, wrap(async (q, s) => {
   await pool.query('DELETE FROM imagenes WHERE negocio_id=$1 AND tipo=$2 AND ref=$3', [q.neg.id, String(q.body.tipo), q.body.tipo === 'portada' ? '1' : String(q.body.ref || '')]);
   s.json({ ok: true });
 }));
-api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, cierra: n.cierra || '', tema: n.tema || '' }); }));
+api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, ...horarioAgenda(n), cierra: n.cierra || '', tema: n.tema || '' }); }));
 api.get('/pagina', wrap(async (q, s) => {
   const n = q.neg, id = n.id, Q = (sql, p = [id]) => pool.query(sql, p).then(r => r.rows);
   const [pf, ev, pr, pd] = await Promise.all([
@@ -580,14 +603,14 @@ api.get('/horarios', wrap(async (q, s) => {
 }));
 // Los primeros lugares libres de los próximos días (para "lo antes posible").
 api.get('/proximo', wrap(async (q, s) => {
-  const n = q.neg, pide = String(q.query.barbero || ''), lista = bars(n).includes(pide) ? [pide] : bars(n), hoy = HOY(), ya = ahoraH(), r = [];
+  const n = q.neg, pide = String(q.query.barbero || ''), lista = bars(n).includes(pide) ? [pide] : bars(n), hoy = HOY(), r = [];
   if (!vigente(n)) return s.json([]);
   for (let k = 0; k < 10 && r.length < 3; k++) {
     const d = new Date(hoy + 'T12:00'); d.setDate(d.getDate() + k); const f = d.toLocaleDateString('en-CA');
     if (cerrado(n, f)) continue;
     const occ = await Promise.all(lista.map(b => ocupadas(n, f, b)));
     for (const h of todas(n)) {
-      if (f === hoy && +h.slice(0, 2) <= ya) continue;
+      if (pasada(f, h)) continue;
       const i = occ.findIndex(o => !o.has(h));
       if (i >= 0) { r.push({ fecha: f, hora: h, barbero: lista[i] }); if (r.length >= 3) break; }
     }
@@ -597,16 +620,17 @@ api.get('/proximo', wrap(async (q, s) => {
 api.post('/citas', wrap(async (q, s) => {
   if (limita('c' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
   if (!vigente(q.neg)) return s.status(403).json({ error: 'Esta barbería no está recibiendo citas por ahora.' });
-  const n = q.neg, { cliente, telefono, servicio, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
+  const n = q.neg, { cliente, telefono, servicio, fecha, hora } = q.body;
   let barbero = q.body.barbero;
   if (barbero === 'cualquiera' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) barbero = await elige(n, fecha, String(hora)) || bars(n)[0];
-  if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || h < n.hora_ini || h > n.hora_fin)
+  // La hora debe ser uno de los espacios del horario (con citas cada 30 min vale "09:30"; cada hora, solo las horas en punto).
+  if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || typeof hora !== 'string' || !todas(n).includes(hora))
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
-  if (fecha < HOY() || (fecha === HOY() && h <= ahoraH())) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
+  if (pasada(fecha, hora)) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
   const cot = await paq.cotiza(n.id, servicio, q.body.extras);
   if (!cot) return s.status(400).json({ error: 'Servicio no válido' });
-  if (cerrado(n, fecha) || (await pool.query('SELECT 1 FROM bloqueos WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND (hora IS NULL OR hora=$4)', [n.id, fecha, barbero, hora])).rowCount)
-    return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
+  // Mismo criterio que /horarios: día cerrado, bloqueo o una cita que ya cae en ese espacio (aunque se haya anotado a otra hora, p. ej. 10:17).
+  if ((await ocupadas(n, fecha, barbero)).has(hora)) return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
   try {
     const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio,barbero',
       [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, cot.servicio, fecha, hora, cot.precio, crypto.randomBytes(6).toString('hex'), n.id]);
@@ -628,10 +652,10 @@ api.post('/cancelar', wrap(async (q, s) => {
 }));
 api.post('/reprogramar', wrap(async (q, s) => {
   if (limita('m' + q.ip, 10, 3600e3)) return s.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
-  const n = q.neg, { codigo, fecha, hora } = q.body, h = +String(hora).slice(0, 2);
+  const n = q.neg, { codigo, fecha, hora } = q.body;
   if (!vigente(n)) return s.status(403).json({ error: 'Esta barbería no está recibiendo citas por ahora.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) || !/^\d{2}:\d{2}$/.test(String(hora)) || h < n.hora_ini || h > n.hora_fin) return s.status(400).json({ error: 'Revisa la nueva fecha y hora' });
-  if (fecha < HOY() || (fecha === HOY() && h <= ahoraH())) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) || typeof hora !== 'string' || !todas(n).includes(hora)) return s.status(400).json({ error: 'Revisa la nueva fecha y hora' });
+  if (pasada(fecha, hora)) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
   const c = (await pool.query("SELECT id,cliente,telefono,servicio,barbero,fecha::text AS fecha,hora,precio FROM citas WHERE negocio_id=$1 AND codigo=$2 AND estado='pendiente' AND fecha>=$3", [n.id, String(codigo), HOY()])).rows[0];
   if (!c) return s.status(404).json({ error: 'No encontramos esa cita' });
   if ((await ocupadas(n, fecha, c.barbero)).has(hora)) return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
@@ -653,7 +677,7 @@ api.get('/admin/export', auth, wrap(async (q, s) => {
 api.get('/admin/corte', auth, wrap(async (q, s) => s.json((await pool.query(
   "SELECT barbero, COUNT(*)::int cortes, COALESCE(SUM(precio),0)::float total FROM citas WHERE negocio_id=$1 AND fecha=$2 AND estado='completada' AND ($3::text IS NULL OR barbero=$3) GROUP BY barbero", [q.neg.id, q.query.fecha, mio(q)])).rows)));
 api.get('/admin/catalogo', auth, wrap(async (q, s) => s.json({
-  estilos: (await pool.query("SELECT e.id,e.nombre,e.precio,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 ORDER BY e.id", [q.neg.id])).rows,
+  estilos: (await pool.query("SELECT e.id,e.nombre,e.precio,i.id AS img FROM estilos e LEFT JOIN imagenes i ON i.negocio_id=e.negocio_id AND i.tipo='servicio' AND i.ref=e.id::text WHERE e.negocio_id=$1 AND e.tipo IS DISTINCT FROM 'referencia' ORDER BY e.id", [q.neg.id])).rows, // las referencias de estilo se editan en Página
   productos: (await pool.query("SELECT p.id,p.nombre,p.precio,i.id AS img FROM productos p LEFT JOIN imagenes i ON i.negocio_id=p.negocio_id AND i.tipo='producto' AND i.ref=p.id::text WHERE p.negocio_id=$1 ORDER BY p.id", [q.neg.id])).rows })));
 api.patch('/admin/precio', auth, wrap(async (q, s) => {
   const { tabla, id, precio } = q.body;
@@ -678,8 +702,14 @@ api.get('/admin/insights', auth, wrap(async (q, s) => {
 api.post('/admin/cita', auth, wrap(async (q, s) => {
   const n = q.neg, { cliente, telefono, servicio, fecha, hora, atendida } = q.body, barbero = mio(q) || q.body.barbero;
   if (!String(cliente || '').trim() || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora)) return s.status(400).json({ error: 'Revisa el nombre, el barbero y la hora' });
-  const e = await pool.query('SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2', [servicio, n.id]);
+  // una referencia de estilo puede llamarse igual que un servicio: el precio sale siempre del servicio
+  const e = await pool.query("SELECT precio FROM estilos WHERE nombre=$1 AND negocio_id=$2 AND tipo IS DISTINCT FROM 'referencia' ORDER BY id LIMIT 1", [servicio, n.id]);
   if (!e.rowCount) return s.status(400).json({ error: 'Servicio no válido' });
+  // Una cita por espacio: con medias horas, una cita anotada a otra hora del mismo espacio (p. ej. 10:17 en el de 10:00) también lo ocupa.
+  // Lo que se registra como ya atendido ("ahora · ya llegó") es solo historial y no se frena.
+  const sl = ranura(n, hora);
+  if (!atendida && sl && (await pool.query("SELECT hora FROM citas WHERE negocio_id=$1 AND fecha=$2 AND barbero=$3 AND estado<>'cancelada'", [n.id, fecha, barbero])).rows.some(x => ranura(n, x.hora) === sl))
+    return s.status(409).json({ error: 'Ese barbero ya tiene una cita a esa hora' });
   try {
     await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,estado,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
       [String(cliente).trim().slice(0, 80), String(telefono || '').slice(0, 20), barbero, servicio, fecha, hora, e.rows[0].precio, crypto.randomBytes(6).toString('hex'), atendida ? 'completada' : 'pendiente', n.id]);
@@ -694,12 +724,20 @@ api.post('/admin/bloqueo', auth, wrap(async (q, s) => {
   s.json({ ok: true });
 }));
 api.post('/admin/bloqueo/borrar', auth, wrap(async (q, s) => { await pool.query('DELETE FROM bloqueos WHERE id=$1 AND negocio_id=$2 AND ($3::text IS NULL OR barbero=$3)', [q.body.id, q.neg.id, mio(q)]); s.json({ ok: true }); }));
+// Configuración de la agenda (solo el dueño: /admin/agenda no está en BARB_OK): citas cada hora o cada 30 min y apertura a la media hora.
+api.get('/admin/agenda/config', auth, (q, s) => s.json({ hora_ini: q.neg.hora_ini, hora_fin: q.neg.hora_fin, ...horarioAgenda(q.neg) }));
+api.post('/admin/agenda/config', auth, wrap(async (q, s) => {
+  const n = q.neg, b = q.body || {}, intervalo = b.intervalo === undefined ? paso(n) : Number(b.intervalo), abre = b.abre_min === undefined ? abreMin(n) : Number(b.abre_min);
+  if (![30, 60].includes(intervalo) || ![0, 30].includes(abre)) return s.status(400).json({ error: 'Elige citas cada hora o cada 30 minutos, y si abres en punto o a la media hora' });
+  const r = (await pool.query('UPDATE negocios SET intervalo=$1, abre_min=$2 WHERE id=$3 RETURNING *', [intervalo, abre, n.id])).rows[0];
+  s.json({ ok: true, hora_ini: r.hora_ini, hora_fin: r.hora_fin, ...horarioAgenda(r) });
+}));
 api.get('/admin/clientes', auth, wrap(async (q, s) => s.json((await pool.query(
   `SELECT regexp_replace(telefono,'\\D','','g') AS tel, (array_agg(cliente ORDER BY fecha DESC, id DESC))[1] AS nombre,
    COUNT(*) FILTER (WHERE estado='completada')::int AS visitas, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float AS gastado,
    (MAX(fecha) FILTER (WHERE estado='completada'))::text AS ultima, (MIN(fecha) FILTER (WHERE estado='pendiente' AND fecha>=$2))::text AS proxima
    FROM citas WHERE negocio_id=$1 AND regexp_replace(telefono,'\\D','','g')<>'' GROUP BY 1 ORDER BY MAX(fecha) DESC LIMIT 300`, [q.neg.id, HOY()])).rows)));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram, plan, vence, abierto: vigente(q.neg) }); });
+api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram, plan, vence, ...horarioAgenda(q.neg), abierto: vigente(q.neg) }); });
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
   const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null, correo = v('correo').toLowerCase().slice(0, 120);
@@ -713,7 +751,7 @@ api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
 api.post('/admin/item', auth, wrap(async (q, s) => {
   const { tabla, tipo, descripcion, precio } = q.body, nm = String(q.body.nombre || '').trim().slice(0, 60);
   if (!['estilos', 'productos'].includes(tabla) || !nm || nm.includes(SEP_EXTRAS) || !(precio >= 0 && precio <= 100000)) return s.status(400).json({ error: 'Escribe el nombre y un precio válido' });
-  if ((await pool.query(`SELECT COUNT(*)::int n FROM ${tabla} WHERE negocio_id=$1`, [q.neg.id])).rows[0].n >= 40) return s.status(400).json({ error: 'Llegaste al límite de 40 elementos' });
+  if ((await pool.query(`SELECT COUNT(*)::int n FROM ${tabla} WHERE negocio_id=$1${tabla === 'estilos' ? " AND tipo IS DISTINCT FROM 'referencia'" : ''}`, [q.neg.id])).rows[0].n >= 40) return s.status(400).json({ error: 'Llegaste al límite de 40 elementos' });
   const d = String(descripcion || '').slice(0, 120);
   if (tabla === 'estilos') await pool.query('INSERT INTO estilos(nombre,tipo,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4,$5)', [nm, ['clásico', 'nuevo', 'servicio'].includes(tipo) ? tipo : 'servicio', d, precio, q.neg.id]);
   else await pool.query('INSERT INTO productos(nombre,descripcion,precio,negocio_id) VALUES($1,$2,$3,$4)', [nm, d, precio, q.neg.id]);
@@ -747,7 +785,7 @@ app.get('/agenda.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/agenda'));
 app.get('/admin.html', (q, s) => s.redirect(301, '/' + PRINCIPAL + '/admin'));
 app.get('/sitemap.xml', wrap(async (q, s) => {
   const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
-  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/registro', '/terminos', '/privacidad', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
+  s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/en', '/registro', '/terminos', '/privacidad', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
 }));
 const temaEI = require('./tema-ei');
 const paginaEI = async (q, n) => {
@@ -788,4 +826,6 @@ app.get('/:slug/manifest.json', existe, wrap(async (q, s) => {
     icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
     shortcuts: [{ name: 'Agendar cita', url: `/${q.params.slug}/agenda?app=1` }] });
 }));
+// Cuerpos de más de 1 MB (p. ej. una foto muy pesada): respuesta clara en JSON en vez de la página de error de express.
+app.use((e, q, s, n) => (e && e.type === 'entity.too.large' ? s.status(413).json({ error: 'El archivo es demasiado pesado' }) : n(e)));
 app.listen(process.env.PORT || 3000);

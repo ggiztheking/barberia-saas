@@ -1,12 +1,13 @@
 // Agenda llena (fase 5): huecos de los próximos días, patrón histórico de ocupación,
 // promos relámpago para llenar horas concretas y alertas de inasistencias.
 // "Libre" sigue exactamente la misma regla que la agenda del cliente (/horarios y POST /citas en server.js):
-// horas de hora_ini a hora_fin, días en 'cierra', bloqueos (hora NULL = día completo), citas no canceladas
-// y, en el día de hoy, solo horas posteriores a la hora actual de Mérida.
+// los espacios de todas() (cada hora o cada 30 min, según negocios.intervalo y abre_min), días en 'cierra',
+// bloqueos (hora NULL = día completo), citas no canceladas (cada una ocupa el espacio que la contiene, ranura())
+// y, en el día de hoy, solo espacios que aún no empiezan en Mérida (pasada()).
 // Los recordatorios NO se mandan aquí: se cuentan con crm_envios y se envían desde la bandeja del CRM.
 module.exports = (app, api, d) => {
-  // todas, cerrado, bars, ahoraH y vigente vienen de server.js: son las mismas que usa la agenda del cliente.
-  const { pool, auth, wrap, HOY, limita, todas, cerrado, bars, ahoraH, vigente } = d;
+  // todas, cerrado, bars, ranura, pasada y vigente vienen de server.js: son las mismas que usa la agenda del cliente.
+  const { pool, auth, wrap, HOY, limita, todas, cerrado, bars, ranura, pasada, vigente } = d;
   const Q = (sql, p) => pool.query(sql, p).then(r => r.rows);
   const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const ORDEN = [1, 2, 3, 4, 5, 6, 0]; // la semana empieza en lunes
@@ -24,8 +25,10 @@ module.exports = (app, api, d) => {
       Q(`SELECT fecha::text AS fecha, barbero, hora, estado FROM citas WHERE negocio_id=$1 AND fecha BETWEEN $2 AND $3 AND ${estados || "estado<>'cancelada'"}`, [n.id, desde, hasta]),
       Q('SELECT fecha::text AS fecha, barbero, hora FROM bloqueos WHERE negocio_id=$1 AND fecha BETWEEN $2 AND $3', [n.id, desde, hasta])]);
     const M = {}, celda = (f, b) => ((M[f] = M[f] || {})[b] = M[f][b] || { todo: false, citas: new Set(), bloq: new Set(), estados: {} });
-    for (const c of cit) { const x = celda(c.fecha, c.barbero); x.citas.add(c.hora); x.estados[c.hora] = c.estado; }
-    for (const b of blq) { const x = celda(b.fecha, b.barbero); if (b.hora === null) x.todo = true; else x.bloq.add(b.hora); }
+    const esp = h => ranura(n, h) || h; // cada cita o bloqueo cuenta en el espacio que lo contiene, igual que ocupadas()
+    // Si dos citas caen en el mismo espacio (un "no llegó" de las 10:00 y alguien que llegó a las 10:20), la inasistencia no se pierde.
+    for (const c of cit) { const x = celda(c.fecha, c.barbero), h = esp(c.hora); x.citas.add(h); if (x.estados[h] !== 'no_llego') x.estados[h] = c.estado; }
+    for (const b of blq) { const x = celda(b.fecha, b.barbero); if (b.hora === null) x.todo = true; else x.bloq.add(esp(b.hora)); }
     return M;
   };
   // Un barbero está libre a una hora si no hay cita viva ni bloqueo (igual que ocupadas() en server.js).
@@ -33,7 +36,7 @@ module.exports = (app, api, d) => {
 
   // ---- 1. Huecos de los próximos días
   api.get('/admin/tiempo/huecos', auth, wrap(async (q, s) => {
-    const n = q.neg, B = bars(n), H = todas(n), hoy = HOY(), ya = ahoraH(), N = entero(q.query.dias, 7, 1, 14), hasta = fechaMas(hoy, N - 1);
+    const n = q.neg, B = bars(n), H = todas(n), hoy = HOY(), N = entero(q.query.dias, 7, 1, 14), hasta = fechaMas(hoy, N - 1);
     const M = await ocupacion(n, hoy, hasta);
     const dias = [];
     for (let k = 0; k < N; k++) {
@@ -47,7 +50,7 @@ module.exports = (app, api, d) => {
             dia.capacidad++;
             if (x && x.citas.has(h)) dia.ocupadas++; else libresB.push(b);
           }
-          if (libresB.length && !(f === hoy && +h.slice(0, 2) <= ya)) { dia.huecos.push({ hora: h, libres: libresB.length, barberos: libresB }); dia.libres += libresB.length; }
+          if (libresB.length && !pasada(f, h)) { dia.huecos.push({ hora: h, libres: libresB.length, barberos: libresB }); dia.libres += libresB.length; }
         }
         dia.ocupacion = pct(dia.ocupadas, dia.capacidad);
       }
@@ -96,7 +99,7 @@ module.exports = (app, api, d) => {
     if (fecha > fechaMas(hoy, 30)) return s.status(400).json({ error: 'La promo relámpago es para los próximos días (máximo 30).' });
     if (!horas.length || horas.length > 12 || horas.some(h => !H.includes(h))) return s.status(400).json({ error: 'Elige de 1 a 12 horas dentro de tu horario' });
     if (!(Number.isInteger(desc) && desc >= 0 && desc <= 90)) return s.status(400).json({ error: 'El descuento debe ser un número entero de 0 a 90 %' });
-    if (fecha === hoy && horas.some(h => +h.slice(0, 2) <= ahoraH())) return s.status(400).json({ error: 'Alguna de esas horas de hoy ya pasó. Quítala y vuelve a intentar.' });
+    if (fecha === hoy && horas.some(h => pasada(fecha, h))) return s.status(400).json({ error: 'Alguna de esas horas de hoy ya pasó. Quítala y vuelve a intentar.' });
     if (!vigente(n)) return s.status(403).json({ error: 'Tu cuenta está vencida o suspendida: tus clientes no pueden agendar ahora.' });
     if (cerrado(n, fecha)) return s.status(409).json({ error: 'Ese día no abres. Elige otro día.' });
     const M = await ocupacion(n, fecha, fecha), lib = horas.map(h => ({ hora: h, libres: B.filter(b => libreEn(M, fecha, b, h)).length }));

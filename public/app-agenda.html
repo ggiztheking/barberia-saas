@@ -25,7 +25,9 @@ const J=(u,b)=>fetch('/api/'+N+u,b&&{method:'POST',headers:{'Content-Type':'appl
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),hoy=()=>iso(new Date());
 const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fd=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'}),fc=f=>new Date(f+'T12:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
-const h12=h=>{if(!h)return '';const H=+h.slice(0,2);return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
+const h12=h=>{if(!h)return '';const H=+h.slice(0,2)%24;return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
+/* minutos del día ("09:30" → 570) y "HH:MM" a partir de minutos: la agenda puede tener espacios cada 30 min */
+const mins=h=>+h.slice(0,2)*60+ +h.slice(3,5),hm=t=>String(Math.floor(t/60)%24).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
 const toast=t=>{$$('.toast').forEach(x=>x.remove());const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),3200)};
 let S={};try{S=JSON.parse(localStorage['b_'+N]||'{}')}catch(e){}S.codigos=S.codigos||[];const guarda=()=>{try{localStorage['b_'+N]=JSON.stringify(S)}catch(e){}};
 let TR=[],I={},E=[],EX=[],PQ={},HORAS=[],tipo='todos',ftipo='todos',X={srv:null,bar:null,dia:null,hora:null,ex:[]};
@@ -62,7 +64,7 @@ $$('#bar .opt').forEach(b=>b.onclick=()=>{X.bar=b.dataset.v;X.hora=null;pintaB()
 function pintaD(){const c=(I.cierra||'').split(','),L=[];for(let k=0;k<14;k++){const d=new Date();d.setDate(d.getDate()+k);L.push([iso(d),d,c.includes(String(d.getDay()))])}
 $('#dias').innerHTML=L.map(([f,d,cz],k)=>`<button class="dia" data-f="${f}" aria-pressed="${X.dia===f}" ${cz?'disabled title="Cerrado"':''}><span>${k===0?'Hoy':k===1?'Mañana':d.toLocaleDateString('es-MX',{weekday:'short'}).replace('.','')}</span><b>${d.getDate()}</b><span>${cz?'Cerrado':d.toLocaleDateString('es-MX',{month:'short'}).replace('.','')}</span></button>`).join('');
 $$('#dias .dia').forEach(b=>b.onclick=()=>{X.dia=b.dataset.f;X.hora=null;pintaD();horas();estado()})}
-async function libres(f,b){const t=await J('/horarios?fecha='+f+'&barbero='+encodeURIComponent(b)),ya=f===hoy()?new Date().getHours():-1;return HORAS.map(h=>[h,!t.includes(h)&&+h.slice(0,2)>ya])}
+async function libres(f,b){const t=await J('/horarios?fecha='+f+'&barbero='+encodeURIComponent(b)),d=new Date(),ya=f===hoy()?d.getHours()*60+d.getMinutes():-1;return HORAS.map(h=>[h,!t.includes(h)&&mins(h)>ya])}
 const franjas=(L,act)=>{const G=[['Mañana',h=>h<12],['Tarde',h=>h>=12&&h<18],['Noche',h=>h>=18]].map(([t,f])=>[t,L.filter(([h])=>f(+h.slice(0,2)))]).filter(([,l])=>l.length);
 return L.some(([,ok])=>ok)?G.map(([t,l])=>`<div class="franja">${t}</div><div class="chips">${l.map(([h,ok])=>`<button data-h="${h}" ${ok?'':'disabled'} aria-pressed="${act===h}">${h12(h)}</button>`).join('')}</div>`).join(''):'<div class="vacio">No quedan horarios este día. Prueba con otro.</div>'};
 async function horas(){const el=$('#horas');if(!X.dia||!X.bar){el.innerHTML=`<div class="vacio">Elige ${!X.bar?'un barbero':'un día'} para ver los horarios.</div>`;return}
@@ -78,7 +80,7 @@ const fmtTel=v=>{const d=v.replace(/\D/g,'').replace(/^52(?=\d{10}$)/,'').slice(
 $('#nom').oninput=estado;$('#tel').oninput=e=>{const p=e.target.selectionStart===e.target.value.length;e.target.value=fmtTel(e.target.value);if(p)e.target.selectionStart=e.target.value.length;$('#tel-e').hidden=true;estado()};
 $('#tel').onblur=()=>{const n=$('#tel').value.replace(/\D/g,'').length;$('#tel-e').hidden=!n||n===10};
 $('#srv-mas').onclick=()=>{TODOS=true;pintaS()};
-function ics(c,f,h){const p=f.replace(/-/g,''),h0=h.replace(':',''),h1=String(+h.slice(0,2)+1).padStart(2,'0')+h.slice(3,5);
+function ics(c,f,h){const p=f.replace(/-/g,''),h0=h.replace(':',''),h1=hm(Math.min(mins(h)+(I.intervalo||60),1439)).replace(':','');
 return 'data:text/calendar;charset=utf8,'+encodeURIComponent(`BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Agenda//ES\nBEGIN:VEVENT\nUID:${c}@barberia\nDTSTAMP:${p}T000000Z\nDTSTART;TZID=America/Merida:${p}T${h0}00\nDTEND;TZID=America/Merida:${p}T${h1}00\nSUMMARY:Cita en ${I.nombre}\nLOCATION:${(I.direccion||'').replace(/,/g,'\\,')}\nEND:VEVENT\nEND:VCALENDAR`)}
 $('#go').onclick=async()=>{const g=$('#go');g.disabled=true;g.textContent='Apartando…';$('#err').innerHTML='';
 try{const nom=$('#nom').value.trim(),tel=$('#tel').value.trim(),d=await J('/citas',{cliente:nom,telefono:tel,barbero:X.bar,servicio:X.srv.nombre,extras:X.ex,fecha:X.dia,hora:X.hora});
@@ -113,7 +115,7 @@ async function mis(){const el=$('#mlist');el.innerHTML='<div class="vacio">Carga
 if(YO){const h=YO.historial;
 el.innerHTML=`<div class="cuenta-cab"><span class="av">${esc((YO.nombre.trim()[0]||'?').toUpperCase())}</span><div style="flex:1"><b style="font-weight:400;font-size:19px">${esc(YO.nombre)}</b><br><small style="color:var(--dim)">${esc(YO.telefono)}</small></div><button class="alt" id="c-salir" style="padding:10px 14px;font-size:11px">Salir</button></div>
 <h3 style="margin:8px 0 12px">Próximas citas</h3>${YO.proximas.length?YO.proximas.map(tarjeta).join(''):'<div class="vacio">No tienes citas próximas. <a style="color:var(--gold)" href="#agendar">Agendar una</a></div>'}
-<h3 style="margin:30px 0 8px">Historial</h3>${h.length?h.map(x=>`<div class="hb" style="flex-wrap:wrap"><span style="flex:1;min-width:150px;white-space:normal">${esc(x.servicio)} con ${esc(x.barbero)}<br><small style="color:var(--dim)">${fd(x.fecha)} · ${esc(x.hora)}</small></span><span class="tag ${esc(x.estado)}">${EST[x.estado]||esc(x.estado)}</span></div>`).join(''):'<p>Aquí aparecerán tus visitas.</p>'}
+<h3 style="margin:30px 0 8px">Historial</h3>${h.length?h.map(x=>`<div class="hb" style="flex-wrap:wrap"><span style="flex:1;min-width:150px;white-space:normal">${esc(x.servicio)} con ${esc(x.barbero)}<br><small style="color:var(--dim)">${fd(x.fecha)} · ${esc(h12(x.hora))}</small></span><span class="tag ${esc(x.estado)}">${EST[x.estado]||esc(x.estado)}</span></div>`).join(''):'<p>Aquí aparecerán tus visitas.</p>'}
 <details style="margin-top:30px"><summary style="cursor:pointer;color:var(--gold)">Editar mis datos</summary><div class="panel"><label for="y-n">Nombre</label><input id="y-n" value="${esc(YO.nombre)}"><label for="y-a">Contraseña actual (solo si la cambias)</label><input id="y-a" type="password" autocomplete="current-password"><label for="y-p">Nueva contraseña</label><input id="y-p" type="password" autocomplete="new-password"><button id="y-g">Guardar</button></div></details>`;
 acciones(el,YO.proximas);$('#c-salir').onclick=async()=>{await P('/cliente/salir');YO=null;toast('Sesión cerrada');mis()};
 $('#y-g').onclick=async()=>{try{await P('/cliente/datos',{nombre:$('#y-n').value,actual:$('#y-a').value,nueva:$('#y-p').value});toast('Datos guardados');mis()}catch(e){toast(e.message)}};return}
@@ -141,7 +143,7 @@ hh.querySelectorAll('button[data-h]').forEach(b=>b.onclick=()=>{h=b.dataset.h;hh
 ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codigo,fecha:f,hora:h});toast('Listo: '+fd(f)+' a las '+h12(h));mis()}catch(e){toast(e.message);ok.disabled=false}}};pinta()}
 (async()=>{try{I=await J('/info')}catch(e){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">No se pudo cargar la agenda. Revisa tu conexión y recarga.</div>';return}
 if(I.tema==='ei'){for(const h of ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Manrope:wght@600;700;800&display=swap','/agenda-ei.css?v=1']){const l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.append(l)}$('meta[name=theme-color]').content='#f1efe9'}
-document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
+document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.isArray(I.horas)?I.horas:Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
 $('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'')+' · <a style="color:var(--gold)" href="/'+encodeURIComponent(N)+'/privacidad">Aviso de privacidad</a>';$('#priv').href='/'+encodeURIComponent(N)+'/privacidad';
 $('#nom').value=S.nom||'';$('#tel').value=fmtTel(S.tel||'');
 E=await J('/estilos');try{const c=await J('/paquetes');EX=c.extras;PQ=Object.fromEntries(c.paquetes.map(p=>[p.id,p.lavado]))}catch(e){}try{TR=(await J('/trabajos')).filter(t=>!t.barbero||I.barberos.includes(t.barbero))}catch(e){TR=[]}pintaE();
