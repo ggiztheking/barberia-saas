@@ -198,7 +198,9 @@ test('una etiqueta que menciona IA no marca la foto como de IA; los filtros solo
   assert.equal((await llama(slugC, cookieC, '/admin/referencia', { id: r0.id, nombre: 'Foto real', descripcion: 'Hecha en el local', etiqueta: 'Foto real, sin IA', ia: false })).status, 200);
   let h = await (await fetch(`${base}/${slugC}`)).text();
   assert.ok(h.includes('FOTO REAL, SIN IA'), 'la etiqueta se muestra tal cual');
-  assert.ok(!/generadas? con IA/i.test(h), 'la página no dice que sean imágenes de IA');
+  // Solo en la sección de referencias: la galería ilustrativa de la plantilla sí dice (con razón) que sus fotos son de IA.
+  const secRef = (h.match(/<section[^>]*id="estilos"[\s\S]*?<\/section>/) || [''])[0];
+  assert.ok(secRef && !/generadas? con IA/i.test(secRef), 'la sección de referencias no dice que sean imágenes de IA');
   assert.ok(h.includes('Referencias para inspirarte.'));
   assert.ok(!h.includes('class="filters"'), 'con 24 referencias no hay una fila de 25 botones de filtro');
   // Marcada como IA y con etiqueta propia: se agrega la leyenda.
