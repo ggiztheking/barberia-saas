@@ -74,9 +74,11 @@ const t=await J('/admin/corte?fecha='+f),tot=t.reduce((a,x)=>a+x.total,0);$('#co
 const est=async(id,e)=>{try{await J('/admin/citas/'+id,{estado:e});toast({completada:'Marcada como atendida',no_llego:'Marcada: no llegó',cancelada:'Cita cancelada',pendiente:'Cambio deshecho'}[e]);cargar();if(DUENO)insights()}catch(x){toast(x.message)}};
 async function catalogo(){const c=await J('/admin/catalogo');SERV=c.estilos.map(x=>x.nombre);forms();
 $('#cat').innerHTML=[['estilos','Servicios',c.estilos],['productos','Productos',c.productos]].map(([t,n,r])=>`<h3>${n}</h3>`+r.map(x=>`<div class="acc" style="align-items:center;margin-bottom:6px">${t?`<label class="th" title="Foto" style="flex:0 0 46px;height:46px;margin:6px 0 0;cursor:pointer;border:1px solid var(--line);background:var(--panel) center/cover no-repeat;${x.img?`background-image:url(/i/${Number(x.img)})`:''};display:grid;place-items:center;font-size:18px;letter-spacing:0;color:var(--dim)">${x.img?'':'+'}<input type="file" accept="image/*" hidden onchange="sube(this,'${t==='estilos'?'servicio':'producto'}','${Number(x.id)}',catalogo)"></label>`:''}<span style="flex:1;min-width:120px">${esc(x.nombre)}</span><input type="number" min="0" value="${Number(x.precio)}" style="width:90px;margin:0" id="p-${t}-${Number(x.id)}" aria-label="Precio de ${esc(x.nombre)}"><button style="margin:0" onclick="precio('${t}',${Number(x.id)})">Guardar</button><button class="alt" style="margin:0" onclick="borra('${t}',${Number(x.id)})">Quitar</button></div>`).join('')+`<div class="acc" style="align-items:end;margin:14px 0 26px"><input id="n-${t}" placeholder="Nuevo ${t==='estilos'?'servicio':'producto'}" style="flex:1;min-width:140px;margin:0">${t==='estilos'?'<select id="t-estilos" style="width:auto;margin:0"><option value="clásico">Clásico</option><option value="nuevo">Nuevo</option><option value="servicio">Barba / combo</option></select>':''}<input id="v-${t}" type="number" min="0" placeholder="$" style="width:80px;margin:0"><button style="margin:0" onclick="agrega('${t}')">Agregar</button></div>`).join('')}
-async function precio(t,id){const v=$(`#p-${t}-${id}`).value;if(v==='')return;await J('/admin/precio',{tabla:t,id,precio:Number(v)});toast('Precio guardado')}
-async function agrega(t){try{await J('/admin/item',{tabla:t,nombre:$('#n-'+t).value,tipo:t==='estilos'?$('#t-estilos').value:undefined,precio:Number($('#v-'+t).value)},'POST');catalogo()}catch(e){toast(e.message)}}
-async function borra(t,id){if(!confirm('¿Quitar este elemento?'))return;await J('/admin/borrar',{tabla:t,id},'POST');catalogo()}
+// Tocar el catálogo cuenta como "revisé mis servicios y precios" en los primeros pasos.
+const revisado=()=>{try{if(localStorage['s_'+N]!=='1'){localStorage['s_'+N]='1';pasos()}}catch(e){}};
+async function precio(t,id){const v=$(`#p-${t}-${id}`).value;if(v==='')return;try{await J('/admin/precio',{tabla:t,id,precio:Number(v)});toast('Precio guardado');revisado()}catch(e){toast(e.message)}}
+async function agrega(t){try{await J('/admin/item',{tabla:t,nombre:$('#n-'+t).value,tipo:t==='estilos'?$('#t-estilos').value:undefined,precio:Number($('#v-'+t).value)},'POST');catalogo();revisado()}catch(e){toast(e.message)}}
+async function borra(t,id){if(!confirm('¿Quitar este elemento?'))return;try{await J('/admin/borrar',{tabla:t,id},'POST');catalogo();revisado()}catch(e){toast(e.message)}}
 function banner(a){const d=a.vence?Math.ceil((new Date(a.vence)-Date.now())/864e5):null,P={prueba:'Prueba gratis',basico:'Plan Básico',pro:'Plan Pro'}[a.plan]||a.plan;
 if(a.abierto&&a.plan!=='prueba'&&(d===null||d>7)){$('#plan').innerHTML='';return}$('#plan').innerHTML=`<div class="msg ${a.abierto?'ok':''}" style="margin:0 0 18px"><b>${esc(P)}</b> · ${!a.abierto?'Tu cuenta está vencida o suspendida y tus clientes no pueden agendar.':d===null?'sin vencimiento':d+' días restantes'} · <a href="#" style="color:var(--gold)" onclick="tab('plan');return false">Ver planes</a></div>`}
 const CAMPOS=[['nombre','Nombre del negocio'],['whatsapp','WhatsApp (10 dígitos)'],['correo','Correo para avisos de citas'],['avisos','WhatsApp para avisos de citas (si es distinto)'],['direccion','Dirección'],['maps','Enlace de Google Maps'],['barberos','Barberos (separados por coma)'],['hora_ini','Abre (hora, 0 a 23)'],['hora_fin','Última cita (hora, 0 a 23)']];
@@ -88,7 +90,10 @@ const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],opt=l=>l.map(x=>`<option>
 async function ajustes(){const a=await J('/admin/ajustes');banner(a);BARS=a.barberos.split(',').map(x=>x.trim()).filter(Boolean);NEG=a.nombre;HI=+a.hora_ini;HF=+a.hora_fin;ponHoras(a);
 $('#aj').innerHTML=`<p>Tu enlace para clientes: <a style="color:var(--gold)" href="/${N}">${location.host}/${N}</a> · <a style="color:var(--gold)" href="/${N}/cartel">Imprimir cartel con QR</a></p>`+CAMPOS.map(([k,l])=>`<label for="a-${k}">${l}</label><input id="a-${k}" value="${esc(a[k])}">`).join('')+
 `<label>Días que no abre</label><div class="acc" style="margin:8px 0 20px;gap:16px">${DS.map((d,i)=>`<label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><input type="checkbox" class="cz" value="${i}" style="width:auto;margin:0" ${(a.cierra||'').split(',').includes(String(i))?'checked':''}>${d}</label>`).join('')}</div><button onclick="guardaAj()">Guardar cambios</button>`;forms();bloqueos();trabajos()}
-async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);b.cierra=[...document.querySelectorAll('.cz:checked')].map(x=>x.value).join(',');try{await J('/admin/ajustes',b);try{localStorage['h_'+N]='1'}catch(e){};toast('Cambios guardados');pasos()}catch(e){toast(e.message)}}
+async function guardaAj(){const b={};CAMPOS.forEach(([k])=>b[k]=$('#a-'+k).value);b.cierra=[...document.querySelectorAll('.cz:checked')].map(x=>x.value).join(',');try{const r=await J('/admin/ajustes',b);try{localStorage['h_'+N]='1'}catch(e){};
+const rn=(r&&r.renombrados)||[];toast(rn.length?'Cambios guardados. '+rn.map(x=>`Lo de ${x.de} (cuenta, citas próximas, perfil y fotos) pasó a ${x.a}.`).join(' '):'Cambios guardados');
+// Los nombres de los barberos se usan en casi todo el panel: se vuelve a dibujar con la lista nueva.
+await ajustes();equipo();perfiles();fotos();cargar();pasos();if($('#fin-b'))$('#fin-b').innerHTML=opt(BARS)}catch(e){toast(e.message)}}
 let NCH=null;
 const h12=h=>{const H=+h.slice(0,2);return (H%12||12)+':'+h.slice(3,5)+(H<12?' a. m.':' p. m.')};
 function forms(){if(!BARS.length||!SERV.length)return;
@@ -125,7 +130,12 @@ if(navigator.share){try{await navigator.share({title:NEG,text:t,url:u})}catch(e)
 async function pasos(){const el=$('#pasos');if(!el||!DUENO)return;let oc=false;try{oc=localStorage['p_'+N]==='0'}catch(e){}if(oc){el.innerHTML='';return}
 let i,a,eq,cl,tr;try{[i,a,eq,cl,tr]=await Promise.all([J('/info'),J('/admin/ajustes'),J('/admin/equipo'),J('/admin/clientes'),J('/admin/trabajos')])}catch(e){return}
 const fl=k=>{try{return localStorage[k+N]==='1'}catch(e){return false}};
-const P=[['Sube la portada de tu página',!!(i.portada||i.fotos),"ve('pagina','#fotos')",'Subir'],
+// La barbería nace con servicios y productos de ejemplo y con "Barbero 1": esos dos pasos van primero.
+// Se marcan solos si ya cambió el catálogo (servicios_ejemplo) o ya no está "Barbero 1"; si todo está bien así, el dueño los marca a mano ("Ya está").
+const BS=String(a.barberos||'').split(',').map(x=>x.trim()).filter(Boolean);
+const P=[['Revisa tus servicios y precios (vienen de ejemplo)',a.servicios_ejemplo===false||fl('s_'),"ve('ajustes','#cat')",'Revisar','s_'],
+['Pon el nombre de tus barberos',!BS.includes('Barbero 1')||fl('b_'),"ve('ajustes','#aj','#a-barberos')",'Poner','b_'],
+['Sube la portada de tu página',!!(i.portada||i.fotos),"ve('pagina','#fotos')",'Subir'],
 ['Sube fotos de tus cortes',tr.length>0,"ve('ajustes','#trab')",'Subir'],
 ['Revisa tu horario y días de descanso',!!a.cierra||fl('h_'),"ve('ajustes','#aj')",'Revisar'],
 ['Pon tu correo para recibir avisos de citas',!!(a.correo||a.avisos),"ve('ajustes','#aj')",'Poner'],
@@ -134,7 +144,8 @@ const P=[['Sube la portada de tu página',!!(i.portada||i.fotos),"ve('pagina','#
 ['Recibe tu primera cita',cl.length>0,"compartir()",'Compartir']],n=P.filter(x=>x[1]).length;
 if(n===P.length){el.innerHTML='';return}
 el.innerHTML=`<div class="pasos"><div class="acc" style="align-items:baseline"><h3 style="flex:1">Primeros pasos</h3><button class="enlace" onclick="try{localStorage['p_'+N]='0'}catch(e){};pasos()">Ocultar</button></div><p style="margin:0">${n} de ${P.length} listos. Termina estos y tu barbería queda lista para recibir clientes.</p>
-<div class="prog" style="margin-top:10px"><i style="width:${Math.round(n/P.length*100)}%"></i></div><ol>${P.map(([t,ok,f,b])=>`<li class="${ok?'ok':''}"><i>${ok?'✓':''}</i><span>${t}</span>${ok?'':`<button class="alt" onclick="${f}">${b}</button>`}</li>`).join('')}</ol></div>`}
+<div class="prog" style="margin-top:10px"><i style="width:${Math.round(n/P.length*100)}%"></i></div><ol>${P.map(([t,ok,f,b,k])=>`<li class="${ok?'ok':''}"><i>${ok?'✓':''}</i><span>${t}</span>${ok?'':`<button class="alt" onclick="${f}">${b}</button>${k?`<button class="enlace" style="padding:8px 2px" onclick="marcaPaso('${k}')">Ya está</button>`:''}`}</li>`).join('')}</ol></div>`}
+function marcaPaso(k){try{localStorage[k+N]='1'}catch(e){}pasos()}
 async function bloqueos(){if(!BARS.length)return;const L=await J('/admin/bloqueos'),H=horasDia();
 $('#blq').innerHTML=`<p>Marca descansos, comidas, vacaciones o días libres. Esos horarios dejan de aparecer para tus clientes.</p><div class="acc"><select id="bq-b" style="flex:1;margin:0">${DUENO?'<option value="todos">Todos los barberos</option>':''}${opt(BARS)}</select><input id="bq-f" type="date" value="${hoy()}" style="flex:1;margin:0"><select id="bq-h" style="flex:1;margin:0"><option value="">Todo el día</option>${H.map(h=>`<option value="${esc(h)}">${h12(h)}</option>`).join('')}</select></div>
 <div class="acc" style="margin:8px 0 14px"><input id="bq-m" placeholder="Motivo (opcional)" style="flex:1;margin:0"><button style="margin:0" onclick="bloquea()">Bloquear</button></div>`+(L.length?L.map(x=>`<div class="hb"><span style="flex:1;min-width:0;white-space:normal">${esc(x.barbero)} · ${esc(x.fecha)} · ${x.hora?esc(h12(x.hora)):'todo el día'}${x.motivo?' · '+esc(x.motivo):''}</span><button class="alt" style="padding:8px 12px" onclick="quitaB(${Number(x.id)})">Quitar</button></div>`).join(''):'<p>No hay bloqueos próximos.</p>')}
@@ -203,7 +214,8 @@ setInterval(()=>{if(!document.hidden&&TAB==='hoy'&&$('#dia').value===hoy())carga
 let ME={},DUENO=false;
 async function sube(inp,tipo,ref,luego){const f=inp.files[0];inp.value='';if(!f)return;if(!/^image\//.test(f.type))return toast('Elige una imagen');
 try{toast('Subiendo foto…');const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error('No se pudo leer la imagen'));i.src=URL.createObjectURL(f)});
-const R={portada:[1600,1000],barbero:[600,600],servicio:[800,600]}[tipo],ar=R[0]/R[1];let sw=img.naturalWidth,sh=img.naturalHeight,sx=0,sy=0;
+// Medida final de cada tipo de foto (los mismos tipos que acepta /admin/imagen); cualquier otro usa la de servicio.
+const R={portada:[1600,1000],barbero:[600,600],servicio:[800,600],producto:[800,600],evento:[1200,800]}[tipo]||[800,600],ar=R[0]/R[1];let sw=img.naturalWidth,sh=img.naturalHeight,sx=0,sy=0;
 if(tipo!=='portada'){if(sw/sh>ar){sx=(sw-sh*ar)/2;sw=sh*ar}else{sy=(sh-sw/ar)/2;sh=sw/ar}}
 const k=Math.min(1,R[0]/sw),c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);c.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);URL.revokeObjectURL(img.src);
 let q=.85,d=c.toDataURL('image/jpeg',q);while(d.length>900000&&q>.4){q-=.12;d=c.toDataURL('image/jpeg',q)}

@@ -239,3 +239,107 @@ test('extras: miniatura solo con palabra clave; galería "La experiencia" solo s
   assert.ok(cuatro.includes('id="trabajos"') && cuatro.includes('Cortes <em>reales.</em>'));
   assert.ok(!cuatro.includes('id="experiencia"') && !cuatro.includes('/img/tema/galeria-'), 'con 4 trabajos reales no hay galería ilustrativa');
 });
+
+// ---- Personalizador y horario de citas en línea (se prueban sobre el HTML que dibuja tema-ei.js, sin base) ----
+const vm = require('node:vm');
+const dibuja = require('../tema-ei');
+const pagina = (n = {}, extra = {}) => dibuja({
+  n: { slug: 'prueba', nombre: 'Barbería Prueba', hora_ini: 10, hora_fin: 19, intervalo: 60, abre_min: 0, cierra: '', ...n }, base: 'http://x',
+  paquetes: [{ id: 13, nombre: 'Elige tu corte', precio: 200, etiqueta: '', incluye: ['Corte'], lavado: false }, { id: 14, nombre: 'Corte Fresco', precio: 280, etiqueta: '', incluye: ['Corte', 'Lavado'], lavado: true }],
+  extras: [{ id: 1, nombre: 'Cejas', precio: 50 }, { id: 2, nombre: 'Lavado', precio: 50, lavado: true }, { id: 3, nombre: 'Masaje', precio: 50 }],
+  referencias: [], trabajos: [], preguntas: [], portada: null, abierto: true, whatsappUrl: '', ...extra });
+// Corre el <script> de la página con un DOM mínimo hecho con el <select> y las casillas del mismo HTML.
+// `antes` deja cambiar el estado antes de que corra (como cuando el navegador restaura el formulario al regresar).
+const personalizador = (h, antes) => {
+  const script = h.match(/<script>\n([\s\S]*?)<\/script><\/body>/)[1];
+  const options = [...h.matchAll(/<option value="(\d+)" data-precio="([\d.]+)" data-lavado="([01])" data-nombre="([^"]*)">/g)].map(m => ({ value: m[1], dataset: { precio: m[2], lavado: m[3], nombre: m[4] } }));
+  const sel = { options, selectedIndex: 0, get value() { return this.options[this.selectedIndex].value; }, set value(v) { this.selectedIndex = this.options.findIndex(o => o.value === String(v)); } };
+  const cajas = [...h.matchAll(/<input type="checkbox" data-id="(\d+)" data-precio="([\d.]+)" data-lavado="([01])" data-nombre="([^"]*)">/g)].map(m => {
+    const b = { textContent: '' };
+    return { checked: false, disabled: false, dataset: { id: m[1], precio: m[2], lavado: m[3], nombre: m[4] }, parentNode: { querySelector: () => b }, b };
+  });
+  const total = { textContent: '' }, ir = { href: '', firstChild: { nodeValue: '' } };
+  const uno = { '#paquete': sel, '#total': total, '#ir': ir, '#personaliza': { scrollIntoView() {} } };
+  const document = { querySelector: s => uno[s] || null, querySelectorAll: s => (s === '.extra input' ? cajas : []) };
+  if (antes) antes(sel, cajas);
+  vm.runInNewContext(script, { document, navigator: {}, addEventListener() {} });
+  const lavado = cajas.find(c => c.dataset.nombre === 'Lavado');
+  return {
+    paquete: nombre => { sel.selectedIndex = options.findIndex(o => o.dataset.nombre === nombre); sel.onchange({}); },
+    marca: (nombre, v = true) => { const c = cajas.find(x => x.dataset.nombre === nombre); assert.ok(!c.disabled, nombre + ' no se puede tocar'); c.checked = v; c.onchange({}); },
+    estado: () => ({ total: total.textContent, href: ir.href, lavado: lavado.checked, bloqueado: lavado.disabled, etiqueta: lavado.b.textContent }),
+  };
+};
+
+test('personalizador: el lavado que se marcó solo por el paquete se desmarca al cambiar a uno que no lo incluye', () => {
+  const p = personalizador(pagina());
+  assert.deepEqual(p.estado(), { total: '$200', href: '/prueba/agenda?servicio=13', lavado: false, bloqueado: false, etiqueta: '+$50' });
+  p.marca('Cejas'); p.marca('Masaje');
+  assert.deepEqual(p.estado(), { total: '$300', href: '/prueba/agenda?servicio=13&extras=1,3', lavado: false, bloqueado: false, etiqueta: '+$50' });
+  p.paquete('Corte Fresco');
+  assert.deepEqual(p.estado(), { total: '$380', href: '/prueba/agenda?servicio=14&extras=1,3', lavado: true, bloqueado: true, etiqueta: 'Incluido' }, 'incluido: marcado, bloqueado y sin cobrarse');
+  p.paquete('Elige tu corte');
+  assert.deepEqual(p.estado(), { total: '$300', href: '/prueba/agenda?servicio=13&extras=1,3', lavado: false, bloqueado: false, etiqueta: '+$50' }, 'el lavado no queda marcado ni se cobra');
+  // Ida y vuelta varias veces: siempre igual.
+  p.paquete('Corte Fresco'); p.paquete('Elige tu corte');
+  assert.equal(p.estado().total, '$300');
+});
+
+test('personalizador: si el cliente marcó el lavado él mismo, se respeta al cambiar de paquete', () => {
+  const p = personalizador(pagina());
+  p.marca('Lavado');
+  assert.deepEqual(p.estado(), { total: '$250', href: '/prueba/agenda?servicio=13&extras=2', lavado: true, bloqueado: false, etiqueta: '+$50' });
+  p.paquete('Corte Fresco');
+  assert.deepEqual(p.estado(), { total: '$280', href: '/prueba/agenda?servicio=14', lavado: true, bloqueado: true, etiqueta: 'Incluido' }, 'incluido: no se cobra dos veces');
+  p.paquete('Elige tu corte');
+  assert.deepEqual(p.estado(), { total: '$250', href: '/prueba/agenda?servicio=13&extras=2', lavado: true, bloqueado: false, etiqueta: '+$50' }, 'sigue marcado porque el cliente lo eligió');
+  p.marca('Lavado', false);
+  assert.equal(p.estado().total, '$200');
+  // Al regresar a la página, el navegador puede dejar el paquete con lavado y su casilla marcada: se toma como automática.
+  const r = personalizador(pagina(), (sel, cajas) => { sel.selectedIndex = 1; cajas[1].checked = true; });
+  assert.equal(r.estado().etiqueta, 'Incluido');
+  r.paquete('Elige tu corte');
+  assert.deepEqual(r.estado(), { total: '$200', href: '/prueba/agenda?servicio=13', lavado: false, bloqueado: false, etiqueta: '+$50' });
+});
+
+test('horario de citas en línea junto al horario del local (mismo formato que la agenda)', () => {
+  const citas = h => [...h.matchAll(/<small class="citas-linea">([^<]*)<\/small>/g)].map(m => m[1]);
+  const conTexto = pagina({ horario_texto: '9:30 AM a 11:00 PM' });
+  assert.deepEqual(citas(conTexto), ['Citas en línea de 10:00 a. m. a 7:00 p. m.', 'Citas en línea de 10:00 a. m. a 7:00 p. m.'], 'en la portada y en "Encuéntranos"');
+  assert.ok(conTexto.includes('HORARIO <b>9:30 AM — 11:00 PM</b>'), 'el horario del local sigue igual');
+  // Cada 30 minutos y abriendo a la media hora: el último espacio es 19:30 (su hora, 19, es la última cita).
+  assert.equal(citas(pagina({ horario_texto: '9 am - 9 pm', hora_ini: 9, abre_min: 30, intervalo: 30 }))[0], 'Citas en línea de 9:30 a. m. a 7:30 p. m.');
+  assert.equal(citas(pagina({ horario_texto: '9 am - 9 pm', hora_ini: 11, hora_fin: 12 }))[0], 'Citas en línea de 11:00 a. m. a 12:00 p. m.');
+  assert.equal(citas(pagina({ horario_texto: '9 am - 9 pm', hora_ini: 13, hora_fin: 13 }))[0], 'Citas en línea a la 1:00 p. m.');
+  assert.deepEqual(citas(pagina({ horario_texto: '9 am - 9 pm', hora_ini: 20, hora_fin: 19 })), [], 'sin espacios en la agenda no hay línea');
+  // Sin horario_texto el horario que se ve ya es el de la agenda: no se repite.
+  const sinTexto = pagina({ horario_texto: null });
+  assert.deepEqual(citas(sinTexto), []);
+  assert.ok(!sinTexto.includes('Citas en línea'));
+  // Si la barbería no recibe citas en línea, no se anuncian.
+  assert.deepEqual(citas(pagina({ horario_texto: '9:30 AM a 11:00 PM' }, { abierto: false })), []);
+  assert.ok(conTexto.includes('/tema-ei.css?v=4'), 'la hoja de estilos nueva no sale de la caché');
+});
+
+test('la línea de citas en línea coincide con los espacios que da la agenda del servidor', { skip: sinBase }, async () => {
+  const slug = 'cl-' + sufijo, cookie = await registra(base, slug, '10.4.0.1');
+  const h12 = h => { const H = +h.slice(0, 2) % 24; return (H % 12 || 12) + ':' + h.slice(3, 5) + (H < 12 ? ' a. m.' : ' p. m.'); }; // el de app-agenda.html
+  for (const [ini, abre, int, fin] of [[10, 0, 60, 19], [9, 30, 30, 19], [8, 30, 60, 22]]) {
+    await pool.query("UPDATE negocios SET tema='ei', horario_texto='9:30 AM a 11:00 PM', hora_ini=$2, abre_min=$3, intervalo=$4, hora_fin=$5 WHERE slug=$1", [slug, ini, abre, int, fin]);
+    const { horas } = await (await fetch(`${base}/api/${slug}/admin/agenda/config`, { headers: { Cookie: cookie } })).json();
+    const h = await (await fetch(`${base}/${slug}`)).text();
+    assert.ok(h.includes(`Citas en línea de ${h12(horas[0])} a ${h12(horas[horas.length - 1])}`), `${ini}:${abre} cada ${int} hasta ${fin}: ${horas[0]}–${horas[horas.length - 1]}`);
+  }
+  await pool.query('UPDATE negocios SET horario_texto=NULL WHERE slug=$1', [slug]);
+  assert.ok(!(await (await fetch(`${base}/${slug}`)).text()).includes('Citas en línea'), 'sin horario_texto no se duplica');
+});
+
+test('tema-ei.css: el naranja de texto sobre fondo claro tiene contraste ≥4.5:1', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'tema-ei.css'), 'utf8');
+  const L = hex => { const c = hex.match(/[0-9a-f]{2}/gi).map(x => parseInt(x, 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const contraste = (a, b) => { const [x, y] = [L(a), L(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const texto = css.match(/--accent-text:\s*(#[0-9a-f]{6})/i)[1];
+  for (const fondo of ['#f1efe9', '#e7e4da', '#e4e3dc']) assert.ok(contraste(texto, fondo) >= 4.5, `${texto} sobre ${fondo}: ${contraste(texto, fondo).toFixed(2)}`);
+  // Ningún texto (color:) usa el naranja claro #cc7232; el contorno de foco y los fondos naranja no son texto.
+  assert.ok(!/(?:^|[;{\s])color:\s*#cc7232/i.test(css), 'texto con #cc7232');
+});

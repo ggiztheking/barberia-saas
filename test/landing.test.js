@@ -191,6 +191,76 @@ test('"Entrar a mi panel" acepta el enlace, la dirección pegada o el nombre con
   }
 });
 
+// Texto visible de un pedazo de HTML (sin etiquetas y con espacios normalizados).
+const textoDe = h => h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+const faqDe = html => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'].find(x => x['@type'] === 'FAQPage').mainEntity;
+const respuestaVisible = (html, pregunta) => { const m = html.match(new RegExp(`<summary>${pregunta.replace(/[?¿]/g, '\\$&')}</summary><p>([\\s\\S]*?)</p>`)); return m && textoDe(m[1]); };
+
+test('los recordatorios no se prometen automáticos: van ya escritos y se mandan con un toque, sin costo por mensaje', { skip: sinBase }, async () => {
+  for (const [k, pregunta, toque, costo] of [['es', '¿Cómo les llegan los recordatorios?', 'con un toque', /sin costo por mensaje|no pagas nada por mensaje/i], ['en', 'How do reminders reach my clients?', 'with one tap', /no per-message cost/i]]) {
+    const h = pag[k].html;
+    assert.ok(!/WhatsApp Business|se mandan solos|se envían solos|autom[aá]tico si|go out automatically|automatic if/i.test(h), k + ': promete envío automático');
+    // "Automático" solo puede referirse a la renovación del pago, nunca a los recordatorios.
+    for (const [frase] of textoDe(h).matchAll(/[^.]*autom[aá]tic[^.]*/gi)) assert.match(frase, /renews|renueva/i, k + ': ' + frase);
+    const fun = textoDe(h.match(/<h3>(?:Recordatorios|Reminders)<\/h3><p>([\s\S]*?)<\/p>/)[1]);
+    assert.ok(fun.includes(toque) && costo.test(fun), k + ': tarjeta de recordatorios: ' + fun);
+    // La pregunta frecuente se ve en la página y está en el JSON-LD con la misma respuesta.
+    const vis = respuestaVisible(h, pregunta), ld = faqDe(h).find(q => q.name === pregunta);
+    assert.ok(vis && ld, k + ': pregunta de recordatorios visible y en JSON-LD');
+    assert.equal(ld.acceptedAnswer.text, vis, k);
+    assert.ok(vis.includes(toque) && costo.test(vis) && /(fecha|date).*(hora|time).*(barbero|barber)/.test(vis), k + ': ' + vis);
+  }
+});
+
+test('la historia no dice que la barbería de ejemplo es del creador', { skip: sinBase }, async () => {
+  assert.ok(pag.es.html.includes('Lo hizo un barbero de Mérida y se probó en la barbería donde trabaja'));
+  assert.ok(pag.en.html.includes('Built by a barber from Mérida and first tested in a real shop'));
+  for (const k of ['es', 'en'])
+    assert.ok(!/nuestra barbería|nuestra propia barbería|\bour own barbershop|\bour barbershop|built it for our|lo hicimos para/i.test(pag[k].html), k + ': se atribuye una barbería');
+});
+
+test('la captura en computadora no se aplasta en celular: las imágenes conservan su proporción', { skip: sinBase }, async () => {
+  for (const k of ['es', 'en']) {
+    const css = pag[k].html.match(/<style>([\s\S]*?)<\/style>/)[1];
+    // Con width/height en el HTML y solo max-width:100%, el navegador encoge el ancho pero deja el alto de 800 px.
+    assert.match(css, /(^|[}\s])img\{[^}]*height:auto/, k + ': regla global img con height:auto');
+    assert.match(css, /\.esc img\{[^}]*width:100%/, k + ': la captura llena su marco');
+    assert.ok(/<div class="esc[^"]*">[\s\S]*?<img [^>]*width="1280" height="800"/.test(pag[k].html), k + ': la captura declara sus medidas');
+  }
+});
+
+test('el precio y "Precios"/"Entrar" se ven arriba también en celular', { skip: sinBase }, async () => {
+  for (const [k, frase, ancla, entrar] of [['es', 'Desde $399 MXN al mes · 14 días gratis, sin tarjeta', '#precios', 'Entrar'], ['en', 'From $399 MXN per month · 14 days free, no credit card', '#pricing', 'Log in']]) {
+    const h = pag[k].html;
+    assert.ok(textoDe(h.match(/<section class="hero">([\s\S]*?)<\/section>/)[1]).includes(frase), k + ': precio en la portada');
+    const nav = h.match(/<header[\s\S]*?<\/header>/)[0];
+    const precios = etiquetas(nav, 'a').find(a => attr(a, 'href') === ancla), ent = etiquetas(nav, 'a').find(a => attr(a, 'id') === 'ent');
+    assert.ok(precios, k + ': enlace a precios en el encabezado');
+    assert.ok(!/\bln\b/.test(attr(precios, 'class') || ''), k + ': el enlace a precios no lleva la clase que se oculta en celular');
+    assert.ok(ent && nav.includes(`id="ent">${entrar}</a>`), k + ': "Entrar" en el encabezado');
+    // Ninguna regla para celular oculta "Entrar" a 360 px o más (solo en pantallas de 350 px o menos).
+    const css = h.match(/<style>([\s\S]*?)<\/style>/)[1];
+    for (const [, ancho, reglas] of css.matchAll(/@media\(max-width:(\d+)px\)\{((?:[^{}]*\{[^{}]*\})*)\}/g)) {
+      if (/#ent\{display:none\}/.test(reglas)) assert.ok(+ancho < 360, k + ': oculta "Entrar" hasta ' + ancho + 'px');
+      assert.ok(!/(^|[}\s])\.top nav>a\{[^}]*display:none/.test(reglas) && !/\[href="#(precios|pricing)"\][^{]*\{[^}]*display:none/.test(reglas), k + ': oculta precios a ' + ancho + 'px');
+    }
+  }
+});
+
+test('la prueba gratis aclara que incluye hasta 8 barberos; Básico hasta 3 y Pro hasta 8', { skip: sinBase }, async () => {
+  for (const [k, tarjeta, faq, pregunta, b3, b8] of [
+    ['es', 'Todo incluido, hasta 8 barberos', '14 días gratis con todo incluido, hasta 8 barberos', '¿Necesito tarjeta para la prueba gratis?', 'Hasta 3 barberos', 'Hasta 8 barberos'],
+    ['en', 'Everything included, up to 8 barbers', '14 days free with everything included, up to 8 barbers', 'Do I need a credit card for the free trial?', 'Up to 3 barbers', 'Up to 8 barbers']]) {
+    const h = pag[k].html;
+    const pre = h.match(/<div class="pre ap">([\s\S]*?)<\/div>\n<p class="nota">/)[1];
+    assert.ok(pre.includes(`<li>${tarjeta}</li>`), k + ': tarjeta de la prueba');
+    assert.ok(pre.includes(`<li>${b3}</li>`) && pre.includes(`<li>${b8}</li>`), k + ': límites de los planes');
+    const vis = respuestaVisible(h, pregunta), ld = faqDe(h).find(q => q.name === pregunta);
+    assert.ok(vis.includes(faq) && ld.acceptedAnswer.text.includes(faq), k + ': pregunta de la prueba: ' + vis);
+    assert.ok(!/todo incluido(?!, hasta 8)|everything included(?!, up to 8)/i.test(textoDe(h)), k + ': "todo incluido" sin aclarar los barberos');
+  }
+});
+
 test('las dos páginas tienen la misma estructura de secciones y llamadas a la acción', { skip: sinBase }, async () => {
   const cuenta = (h, re) => (h.match(re) || []).length;
   for (const re of [/<section\b/g, /<img\b/g, /<dialog\b/g, /class="btn"[^>]*href="\/registro"/g])

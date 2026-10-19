@@ -1,5 +1,5 @@
 /* Tema "Estilo Internacional" (ei). Diseño del sitio original, sin la sección de fidelidad retirada. */
-:root { --ink: #181a19; --paper: #f1efe9; --tone: #e7e4da; --accent: #e9ac76; --muted: #5e615b; --line: #d5d4cb; --ok: #2f7d4f; }
+:root { --ink: #181a19; --paper: #f1efe9; --tone: #e7e4da; --accent: #e9ac76; --accent-text: #8f4a1b; --muted: #5e615b; --line: #d5d4cb; --ok: #2f7d4f; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 92px; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 16px 'DM Sans', Arial, sans-serif; }
@@ -66,11 +66,12 @@ p { line-height: 1.65; }
 .package:last-child { border: 0; }
 .package > .eyebrow { font-size: 9px; min-height: 30px; }
 .package h3 { min-height: 68px; font-size: 25px; }
+.packages.corto .package h3 { min-height: 34px; }
 .package.premium { background: var(--ink); color: var(--paper); }
 .premium .button { background: var(--accent); color: var(--ink); border-color: var(--accent); }
 .price { font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -.05em; }
 .price small { font-size: 10px; letter-spacing: 0; font-weight: 400; }
-.package ul { padding: 0; list-style: none; font-size: 13px; line-height: 2; min-height: 150px; margin-bottom: 22px; }
+.package ul { padding: 0; list-style: none; font-size: 13px; line-height: 2; min-height: calc(var(--items, 5) * 26px); margin-bottom: 22px; }
 .package .button { font-size: 12px; min-height: 48px; padding: 13px; gap: 8px; margin-top: auto; }
 .plain { background: none; color: inherit; border: 0; font-size: 12px; padding: 12px 0; min-height: 44px; text-decoration: underline; text-underline-offset: 4px; }
 .customize { margin-top: 56px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 9vw; padding: 42px; background: #e4e3dc; }
@@ -116,7 +117,7 @@ p { line-height: 1.65; }
 .faq details:last-child { border-bottom: 1px solid var(--line); }
 .faq summary { cursor: pointer; font-family: Manrope, Arial, sans-serif; font-size: 20px; letter-spacing: -.03em; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 20px; min-height: 44px; }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary::after { content: "+"; font-size: 26px; font-weight: 400; color: #cc7232; flex-shrink: 0; transition: transform .2s; }
+.faq summary::after { content: "+"; font-size: 26px; font-weight: 400; color: var(--accent-text); flex-shrink: 0; transition: transform .2s; }
 .faq details[open] summary::after { transform: rotate(45deg); }
 .faq p { margin: 14px 0 0; color: var(--muted); font-size: 15px; }
 .location { display: grid; grid-template-columns: 1.1fr 1fr; gap: 7vw; align-items: center; }
@@ -144,7 +145,7 @@ footer a { display: inline-flex; align-items: center; min-height: 44px; }
   .package { border-bottom: 1px solid var(--line); padding: 30px; }
   .package:nth-child(2) { border-right: 0; }
   .package h3 { min-height: 32px; }
-  .package ul { min-height: 130px; }
+  .package ul { min-height: calc(var(--items, 5) * 26px); }
   .hero { min-height: 640px; }
   .work-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -217,7 +218,7 @@ footer a { display: inline-flex; align-items: center; min-height: 44px; }
 .steps { display: grid; grid-template-columns: 1fr 1.1fr; gap: 6vw; align-items: center; background: #e7e4da; }
 .steps ol { list-style: none; counter-reset: paso; padding: 0; margin: 10px 0 36px; }
 .steps li { counter-increment: paso; display: grid; grid-template-columns: 52px 1fr; padding: 18px 0; border-top: 1px solid var(--line); }
-.steps li::before { content: "0" counter(paso); grid-row: span 2; font: 800 22px Manrope, Arial, sans-serif; color: #cc7232; }
+.steps li::before { content: "0" counter(paso); grid-row: span 2; font: 800 22px Manrope, Arial, sans-serif; color: var(--accent-text); }
 .steps li b { font: 700 19px Manrope, Arial, sans-serif; letter-spacing: -.02em; }
 .steps li span { color: var(--muted); font-size: 14px; }
 .steps figure { margin: 0; position: relative; }
@@ -288,3 +289,15 @@ footer a { display: inline-flex; align-items: center; min-height: 44px; }
   .experience .button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .gallery figure:hover img { transform: none; } }
+
+/* ---- Plantilla v4: horario de citas en línea junto al horario del local; naranja oscuro para textos sobre fondo claro ---- */
+/* --accent-text (#8f4a1b) da ≥4.9:1 sobre #f1efe9, #e7e4da y #e4e3dc; #cc7232 daba ≈2.7:1. Los fondos naranja (--accent) no cambian. */
+.hero-details .citas-linea { display: block; margin-top: 6px; font-size: 11px; letter-spacing: .02em; color: #d6d8d1; }
+.address .citas-linea { color: var(--muted); }
+
+/* La foto real del local es de 800 px de ancho: a pantalla completa en escritorio se estira y se ve borrosa. Se muestra a su tamaño, pegada a la derecha, con el borde izquierdo difuminado. */
+@media (min-width: 901px) {
+  .hero-fija { background: #0c100e; }
+  .hero-fija .hero-photo { inset: 0 0 0 auto; width: min(62%, 860px); object-fit: cover; -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%); mask-image: linear-gradient(90deg, transparent, #000 40%); }
+  .hero-fija .hero-overlay { background: linear-gradient(90deg, rgba(8, 12, 10, .85), rgba(8, 12, 10, .3) 60%, rgba(8, 12, 10, .12)); }
+}

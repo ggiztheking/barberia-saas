@@ -28,6 +28,36 @@ const rango = n => {
   return { ini, fin: ult + paso };
 };
 const horarioAgenda = n => { const { ini, fin } = rango(n); return `${hm12(ini)} a ${hm12(fin)}`; };
+// Espacios que ofrece la agenda en línea, en minutos: copia exacta de todas() en server.js (mismas condiciones, también
+// cuando hora_fin < hora_ini o se pasa de medianoche: entonces no hay espacios). Formato de hora igual al de la agenda.
+const espaciosAgenda = n => { const r = [], p = +n.intervalo === 30 ? 30 : 60; for (let t = n.hora_ini * 60 + (+n.abre_min === 30 ? 30 : 0); Math.floor(t / 60) <= n.hora_fin && t < 1440; t += p) r.push(t); return r; };
+const hAgenda = m => { const h = Math.floor(m / 60) % 24; return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`; };
+// "Citas en línea de 10:00 a. m. a 7:00 p. m." (del primer al último espacio que se puede reservar). Solo cuando el horario
+// que se muestra es el del local (horario_texto), que puede ser más amplio que la agenda; sin él, el horario ya sale de la agenda.
+const citasEnLinea = n => {
+  if (!n.horario_texto || n.hora_ini == null || n.hora_fin == null) return '';
+  const e = espaciosAgenda(n);
+  return !e.length ? '' : e.length === 1 ? `Citas en línea ${Math.floor(e[0] / 60) % 12 === 1 ? 'a la' : 'a las'} ${hAgenda(e[0])}` : `Citas en línea de ${hAgenda(e[0])} a ${hAgenda(e[e.length - 1])}`;
+};
+
+// Personalizador de paquetes. Corre en el navegador: va tal cual dentro del <script> de la página (String(marcaExtras)),
+// por eso está en ES5 y sin comentarios adentro. Recibe si el paquete elegido incluye lavado, las casillas de extras
+// (con checked, disabled y dataset) y si es la primera pasada al cargar. Un extra de lavado que el paquete ya incluye se
+// marca y se bloquea como "Incluido"; si se marcó solo (data-auto), se desmarca al pasar a un paquete que no lo incluye.
+// Si el cliente lo había marcado él mismo, se respeta. Al cargar, una casilla incluida que el navegador dejó marcada
+// (al regresar a la página) se toma como automática: así nunca se cobra un lavado que el cliente no eligió a la vista.
+// Devuelve las casillas que se cobran.
+function marcaExtras(lav, cajas, inicio) {
+  var cobra = [];
+  cajas.forEach(function (c) {
+    var inc = lav && c.dataset.lavado === '1';
+    if (inc && (!c.checked || inicio)) { c.checked = true; c.dataset.auto = '1'; }
+    else if (!inc && c.dataset.auto) { c.checked = false; delete c.dataset.auto; }
+    c.disabled = inc;
+    if (c.checked && !inc) cobra.push(c);
+  });
+  return cobra;
+}
 // Un horario_texto sencillo ("9:30 AM a 11:00 PM", "10 am - 8 pm") → minutos. Cualquier otra cosa (días, dos turnos,
 // pasar de medianoche) → null: entonces no sabemos de verdad cuándo abre y la página no muestra abierto/cerrado.
 const hTexto = (h, m, ap) => (+h % 12) * 60 + +(m || 0) + (/p/i.test(ap) ? 720 : 0);
@@ -89,6 +119,8 @@ const dibuja = d => {
   const { n, base, paquetes, extras, referencias, trabajos, preguntas, portada, abierto, whatsappUrl, equipo = [], lealtad = null } = d;
   const slug = encodeURIComponent(n.slug), agenda = `/${slug}/agenda`, url = `${base}/${slug}`;
   const horario = n.horario_texto || horarioAgenda(n);
+  // Si la barbería no recibe citas en línea (aviso arriba), no se anuncia su horario de citas.
+  const citas = abierto ? citasEnLinea(n) : '';
   const cerrados = (n.cierra || '').split(',').filter(x => x !== '').map(x => DIAS[+x]).filter(Boolean);
   const desde = paquetes.length ? Math.min(...paquetes.map(p => +p.precio)) : null;
   // Portada: la que subió el dueño, las fotos reales de Estilo Internacional, o una ilustrativa para que ninguna página se vea vacía.
@@ -188,24 +220,24 @@ ${referencias.length >= 2 && referencias.length <= 8 ? `<div class="filters" ari
 <meta name="twitter:title" content="${esc(titulo)}"><meta name="twitter:description" content="${esc(descr)}">
 <link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=3">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=4">
 ${hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
 ${ld.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('\n')}</head><body>
 <a class="skip" href="#paquetes">Saltar a paquetes</a>
 <header class="header"><a class="brand" href="/${slug}" aria-label="${esc(n.nombre)} inicio"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}<small>BARBERÍA${ciudad ? ' · MÉRIDA' : ''}</small></span></a>
 <nav aria-label="Principal"><a href="#paquetes">Paquetes</a>${referencias.length ? '<a href="#estilos">Estilos</a>' : ''}${equipoHtml ? '<a href="#equipo">Equipo</a>' : ''}${galeria ? '<a href="#experiencia">Experiencia</a>' : ''}${faq ? '<a href="#preguntas">Preguntas</a>' : ''}<a href="#ubicacion">Encuéntranos</a></nav><a class="button small" href="#paquetes">Elige tu paquete ↗</a></header>
 ${abierto ? '' : '<div class="notice" role="status">Esta barbería no está recibiendo citas en línea por ahora.</div>'}
-<main><section class="hero"><img class="hero-photo" src="${esc(hero)}" alt="${heroReal ? `Interior de ${esc(n.nombre)}` : 'Imagen ilustrativa de una barbería'}" fetchpriority="high" decoding="async" width="1600" height="1000"><div class="hero-overlay"></div><div class="hero-copy">
+<main><section class="hero${!portada && n.fotos ? ' hero-fija' : ''}"><img class="hero-photo" src="${esc(hero)}" alt="${heroReal ? `Interior de ${esc(n.nombre)}` : 'Imagen ilustrativa de una barbería'}" fetchpriority="high" decoding="async" width="1600" height="1000"><div class="hero-overlay"></div><div class="hero-copy">
 <p class="eyebrow">${esc((n.zonas || n.direccion || 'Barbería').toUpperCase())}</p><h1>${esc(l1)}${lema2 ? `<br><em>${esc(lema2)}</em>` : ''}</h1>${sub ? `<p>${esc(sub).replace(/(?<=[.!?])\s+/g, '<br>')}</p>` : ''}
-<a class="button" href="#paquetes">Encuentra tu paquete <span>↗</span></a><div class="hero-details">${desde !== null ? `<span>DESDE <b>${money(desde)} MXN</b></span>` : ''}<span>HORARIO <b>${esc(horario.toUpperCase().replace(' A ', ' — '))}</b></span>${estadoHtml ? `<span>HOY ${estadoHtml}</span>` : ''}</div></div><span class="hero-caption">${n.fotos || portada ? `FOTO REAL DE NUESTRO LOCAL / ${esc(n.nombre.toUpperCase())}` : 'IMAGEN ILUSTRATIVA'}</span></section>
+<a class="button" href="#paquetes">Encuentra tu paquete <span>↗</span></a><div class="hero-details">${desde !== null ? `<span>DESDE <b>${money(desde)} MXN</b></span>` : ''}<span>HORARIO <b>${esc(horario.toUpperCase().replace(' A ', ' — '))}</b>${citas ? `<small class="citas-linea">${esc(citas)}</small>` : ''}</span>${estadoHtml ? `<span>HOY ${estadoHtml}</span>` : ''}</div></div><span class="hero-caption">${n.fotos || portada ? `FOTO REAL DE NUESTRO LOCAL / ${esc(n.nombre.toUpperCase())}` : 'IMAGEN ILUSTRATIVA'}</span></section>
 <div class="ticker"><span>CORTE</span><i>✳</i><span>BARBA</span><i>✳</i><span>ACTITUD</span><i>✳</i><span>${esc(n.nombre.toUpperCase())}</span></div>
 <section class="section" id="paquetes"><div class="heading"><div><p class="eyebrow">01 / ELIGE CÓMO RENOVARTE</p><h2>El look cambia.<br><em>El estilo es tuyo.</em></h2></div>
 <p>${paquetes.length ? `${NUM[paquetes.length] || paquetes.length} ${paquetes.length === 1 ? 'forma' : 'formas'} de darle un nuevo aire a tu día.<br>` : ''}Precios en pesos mexicanos. Sin cargos por servicios ya incluidos.</p></div>
-${paquetes.length ? `<div class="packages n${Math.min(paquetes.length, 4)}">${paquetes.map(tarjeta).join('')}</div>` : `<p>Pronto publicaremos nuestros paquetes. <a href="${agenda}" style="text-decoration:underline">Agenda tu cita aquí</a>.</p>`}
+${paquetes.length ? `<div class="packages n${Math.min(paquetes.length, 4)}${paquetes.every(p => String(p.nombre).length <= 15) ? ' corto' : ''}" style="--items:${Math.max(1, ...paquetes.map(p => p.incluye.length))}">${paquetes.map(tarjeta).join('')}</div>` : `<p>Pronto publicaremos nuestros paquetes. <a href="${agenda}" style="text-decoration:underline">Agenda tu cita aquí</a>.</p>`}
 ${personaliza}</section>
 ${pasos}${sellos}${estilos}${equipoHtml}${espacio}${galeria}${trabajo}${acerca}${faq}
 <section class="section location${foto ? '' : ' sin-foto'}" id="ubicacion"><div><p class="eyebrow">NOS VEMOS AQUÍ</p><h2>Encuentra<br><em>tu barbería.</em></h2>
-<div class="address">${n.direccion ? `<p>${esc(n.direccion).replace(/,\s*/g, '<br>')}</p>` : ''}<p>HORARIO<br><strong>${esc(horario)}</strong>${cerrados.length ? `<br><small>Cerrado: ${esc(cerrados.join(', '))}</small>` : ''}${estadoHtml ? `<br>${estadoHtml}` : ''}</p></div>
+<div class="address">${n.direccion ? `<p>${esc(n.direccion).replace(/,\s*/g, '<br>')}</p>` : ''}<p>HORARIO<br><strong>${esc(horario)}</strong>${citas ? `<br><small class="citas-linea">${esc(citas)}</small>` : ''}${cerrados.length ? `<br><small>Cerrado: ${esc(cerrados.join(', '))}</small>` : ''}${estadoHtml ? `<br>${estadoHtml}` : ''}</p></div>
 ${n.maps ? `<a class="button" rel="noopener noreferrer" target="_blank" href="${esc(n.maps)}">Cómo llegar · Google Maps ↗</a>` : ''}${tel}${ig}${resena}${n.estacionamiento ? `<p class="fine">Estacionamiento: ${esc(n.estacionamiento)}</p>` : ''}
 <p class="fine">Elige tu paquete, tu barbero y tu horario en la agenda. Tu cita queda apartada al confirmar.</p></div>${foto}</section></main>
 <footer><a class="brand" href="/${slug}"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}</span></a><span>${esc(n.lema || '')}</span><a href="/${slug}/privacidad">Aviso de privacidad</a><small>© ${new Date().getFullYear()} ${esc(n.nombre)}</small></footer>
@@ -213,12 +245,13 @@ ${n.maps ? `<a class="button" rel="noopener noreferrer" target="_blank" href="${
 <script>
 (function(){var $=function(s,r){return(r||document).querySelector(s)},$$=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};
 var sel=$('#paquete');if(sel){var cajas=$$('.extra input'),tot=$('#total'),ir=$('#ir'),wa=$('#wa'),A=${json(agenda)},N=${json(n.nombre)},W=${json(whatsappUrl || '')};
-function pinta(){var o=sel.options[sel.selectedIndex],lav=o.dataset.lavado==='1',s=+o.dataset.precio,ids=[],nom=[];
-cajas.forEach(function(c){var inc=lav&&c.dataset.lavado==='1',b=c.parentNode.querySelector('b');c.disabled=inc;if(inc)c.checked=true;b.textContent=inc?'Incluido':'+$'+c.dataset.precio;
-if(c.checked&&!inc){s+=+c.dataset.precio;ids.push(c.dataset.id);nom.push(c.dataset.nombre+' ($'+c.dataset.precio+' MXN)')}});
+${String(marcaExtras)}
+function pinta(inicio){var o=sel.options[sel.selectedIndex],s=+o.dataset.precio,ids=[],nom=[],cobra=marcaExtras(o.dataset.lavado==='1',cajas,inicio===true);
+cajas.forEach(function(c){c.parentNode.querySelector('b').textContent=c.disabled?'Incluido':'+$'+c.dataset.precio});
+cobra.forEach(function(c){s+=+c.dataset.precio;ids.push(c.dataset.id);nom.push(c.dataset.nombre+' ($'+c.dataset.precio+' MXN)')});
 tot.textContent='$'+s;ir.href=A+'?servicio='+o.value+(ids.length?'&extras='+ids.join(','):'');ir.firstChild.nodeValue='Reservar mi paquete · $'+s+' ↗';
 if(wa&&W){var t='Hola, quiero reservar en '+N+'. Paquete: '+o.dataset.nombre+' ($'+o.dataset.precio+' MXN).'+(nom.length?' Extras: '+nom.join(', ')+'.':'')+' ¿Qué horarios tienen disponibles?';wa.href=W.split('?text=')[0]+'?text='+encodeURIComponent(t)}}
-sel.onchange=pinta;cajas.forEach(function(c){c.onchange=pinta});pinta();
+sel.onchange=pinta;cajas.forEach(function(c){c.onchange=pinta});pinta(true);
 $$('[data-elige]').forEach(function(b){b.onclick=function(){sel.value=b.dataset.elige;pinta();$('#personaliza').scrollIntoView({behavior:'smooth',block:'center'})}})}
 var fb=$$('.filters button');fb.forEach(function(b){b.onclick=function(){fb.forEach(function(x){var on=x===b;x.classList.toggle('selected',on);x.setAttribute('aria-pressed',on)});
 $$('.styles article').forEach(function(a){a.hidden=b.dataset.f!=='todos'&&a.dataset.s!==b.dataset.f})}});

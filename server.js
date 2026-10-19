@@ -11,9 +11,15 @@ app.use((q, s, n) => {
   n();
 });
 app.use((q, s, n) => { s.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN', 'Strict-Transport-Security': 'max-age=15552000', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' }); n(); });
+const fs = require('fs');
+// robots.txt: el de public/ más la línea Sitemap con la dirección pública (va antes de express.static para que no salga sin ella).
+app.get('/robots.txt', (q, s) => {
+  let t = ''; try { t = fs.readFileSync(__dirname + '/public/robots.txt', 'utf8'); } catch (e) { t = 'User-agent: *\nAllow: /\n'; }
+  const base = (process.env.PUBLIC_URL || `${q.protocol}://${q.get('host')}`).replace(/\/$/, '');
+  s.type('text/plain').send(t.replace(/^Sitemap:.*$\n?/gim, '').replace(/\s*$/, '\n') + `Sitemap: ${base}/sitemap.xml\n`);
+});
 app.use('/img', express.static('public/img', { maxAge: '7d' }));
 app.use(express.static('public', { maxAge: 0, etag: true }));
-const fs = require('fs');
 app.get('/health', async (q, s) => { await LISTO; s.send('ok'); }); // "ok" solo cuando las tablas y migraciones ya están listas
 app.get('/i/:id', async (q, s) => {
   if (!/^\d{1,10}$/.test(q.params.id)) return s.sendStatus(404);
@@ -39,7 +45,9 @@ const nomCookie = (tipo, slug) => (tipo === 'staff' ? 'st_' : 'cl_') + slug;
 const nuevoSalt = () => crypto.randomBytes(16).toString('hex');
 const okHash = (p, salt, hash) => !!(salt && hash && typeof p === 'string' && p.length <= 200 && crypto.timingSafeEqual(Buffer.from(hashPass(p, salt), 'hex'), Buffer.from(hash, 'hex')));
 const temporal = () => Array.from(crypto.randomBytes(8), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
-const tel10 = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 12 && d.startsWith('52') ? d.slice(2) : d; };
+// WhatsApp a 10 dígitos: quita la lada de México escrita como +52 / 52 (12 dígitos) o 521 (13, el "1" de celular de antes).
+const tel10 = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 13 && d.startsWith('521') ? d.slice(3) : d.length === 12 && d.startsWith('52') ? d.slice(2) : d; };
+const ERR_TEL = 'Escribe los 10 dígitos de tu WhatsApp.';
 const correoOk = v => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(String(v || ''));
 const ponSesion = async (q, s, tipo, ref, negId, slug) => {
   const t = crypto.randomBytes(32).toString('base64url');
@@ -242,11 +250,14 @@ app.post('/api/registro', wrap(async (q, s) => {
   if (!nombre || !/^[a-z0-9-]{3,30}$/.test(slug) || RES.includes(slug) || pw.length < 8 || pw.length > 200)
     return s.status(400).json({ error: 'Revisa el nombre, el enlace (3 a 30 letras, números o guiones) y la contraseña (mínimo 8 caracteres)' });
   if (!dueno || !correoOk(email)) return s.status(400).json({ error: 'Escribe tu nombre y un correo válido para tu cuenta' });
+  // El WhatsApp es opcional, pero si se escribe debe tener 10 dígitos (antes se guardaba tal cual, p. ej. con 9 dígitos).
+  const tw = tel10(q.body.whatsapp);
+  if (tw && tw.length !== 10) return s.status(400).json({ error: ERR_TEL });
   const salt = crypto.randomBytes(8).toString('hex');
   try {
     // terminos: cuándo aceptó los términos y el aviso de privacidad del SaaS (casilla del formulario de registro).
     const r = await pool.query("INSERT INTO negocios(slug,nombre,whatsapp,salt,hash,vence,terminos) VALUES($1,$2,$3,$4,$5,now()+interval '14 days',CASE WHEN $6 THEN now() END) RETURNING id",
-      [slug, nombre, wa(q.body.whatsapp) || null, salt, hashPass(pw, salt), q.body.acepta === true]);
+      [slug, nombre, tw ? '52' + tw : null, salt, hashPass(pw, salt), q.body.acepta === true]);
     await seed(r.rows[0].id);
     const us = nuevoSalt(), u = await pool.query("INSERT INTO usuarios(negocio_id,nombre,email,salt,hash,rol) VALUES($1,$2,$3,$4,$5,'dueno') RETURNING id", [r.rows[0].id, dueno, email, us, hashPass(pw, us)]);
     await ponSesion(q, s, 'staff', u.rows[0].id, r.rows[0].id, slug);
@@ -624,8 +635,12 @@ api.post('/citas', wrap(async (q, s) => {
   let barbero = q.body.barbero;
   if (barbero === 'cualquiera' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) barbero = await elige(n, fecha, String(hora)) || bars(n)[0];
   // La hora debe ser uno de los espacios del horario (con citas cada 30 min vale "09:30"; cada hora, solo las horas en punto).
-  if (!cliente || !telefono || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || typeof hora !== 'string' || !todas(n).includes(hora))
+  if (!cliente || !bars(n).includes(barbero) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || typeof hora !== 'string' || !todas(n).includes(hora))
     return s.status(400).json({ error: 'Revisa los datos de tu cita' });
+  // El WhatsApp del cliente se guarda en 10 dígitos (+52, 52 o 521 al inicio se quitan) para poder escribirle y reconocerlo.
+  // Las citas que anota el dueño desde el panel van por /admin/cita, donde el teléfono sigue siendo opcional.
+  const tel = tel10(telefono);
+  if (tel.length !== 10) return s.status(400).json({ error: ERR_TEL });
   if (pasada(fecha, hora)) return s.status(400).json({ error: 'Ese horario ya pasó. Elige otro.' });
   const cot = await paq.cotiza(n.id, servicio, q.body.extras);
   if (!cot) return s.status(400).json({ error: 'Servicio no válido' });
@@ -633,10 +648,10 @@ api.post('/citas', wrap(async (q, s) => {
   if ((await ocupadas(n, fecha, barbero)).has(hora)) return s.status(409).json({ error: 'Ese horario no está disponible. Elige otro.' });
   try {
     const r = await pool.query('INSERT INTO citas(cliente,telefono,barbero,servicio,fecha,hora,precio,codigo,negocio_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING codigo,precio,barbero',
-      [String(cliente).slice(0, 80), String(telefono).slice(0, 20), barbero, cot.servicio, fecha, hora, cot.precio, crypto.randomBytes(6).toString('hex'), n.id]);
+      [String(cliente).slice(0, 80), tel, barbero, cot.servicio, fecha, hora, cot.precio, crypto.randomBytes(6).toString('hex'), n.id]);
     const cu = await cuentaCli(q).catch(() => null);
     if (cu) await pool.query('UPDATE citas SET cuenta_id=$1 WHERE negocio_id=$2 AND codigo=$3', [cu.id, n.id, r.rows[0].codigo]);
-    avisa(n, { evento: 'nueva_cita', cliente: String(cliente).slice(0, 80), telefono: String(telefono).slice(0, 20), barbero, servicio: cot.servicio, fecha, hora, precio: Number(r.rows[0].precio) });
+    avisa(n, { evento: 'nueva_cita', cliente: String(cliente).slice(0, 80), telefono: tel, barbero, servicio: cot.servicio, fecha, hora, precio: Number(r.rows[0].precio) });
     s.json(r.rows[0]);
   } catch (x) { if (x.code === '23505') return s.status(409).json({ error: 'Ese horario ya se ocupó. Elige otro.' }); throw x; }
 }));
@@ -737,15 +752,54 @@ api.get('/admin/clientes', auth, wrap(async (q, s) => s.json((await pool.query(
    COUNT(*) FILTER (WHERE estado='completada')::int AS visitas, COALESCE(SUM(precio) FILTER (WHERE estado='completada'),0)::float AS gastado,
    (MAX(fecha) FILTER (WHERE estado='completada'))::text AS ultima, (MIN(fecha) FILTER (WHERE estado='pendiente' AND fecha>=$2))::text AS proxima
    FROM citas WHERE negocio_id=$1 AND regexp_replace(telefono,'\\D','','g')<>'' GROUP BY 1 ORDER BY MAX(fecha) DESC LIMIT 300`, [q.neg.id, HOY()])).rows)));
-api.get('/admin/ajustes', auth, (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram, plan, vence, ...horarioAgenda(q.neg), abierto: vigente(q.neg) }); });
+// ¿El catálogo sigue tal como se sembró al registrarse (mismos nombres y precios de SEED)? Lo usan los "Primeros pasos" del panel.
+const catalogoDeEjemplo = async id => {
+  const r = (await pool.query("SELECT nombre, precio::float AS precio FROM estilos WHERE negocio_id=$1 AND tipo IS DISTINCT FROM 'referencia'", [id])).rows, S = new Map(SEED.map(x => [x[0], x[3]]));
+  return r.length === S.size && r.every(x => S.get(x.nombre) === x.precio);
+};
+api.get('/admin/ajustes', auth, wrap(async (q, s) => { const { nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, plan, vence, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram } = q.neg; s.json({ nombre, whatsapp, direccion, maps, barberos, hora_ini, hora_fin, cierra, avisos, correo, lema, acerca, estacionamiento, zonas, instagram, plan, vence, ...horarioAgenda(q.neg), abierto: vigente(q.neg), servicios_ejemplo: await catalogoDeEjemplo(q.neg.id) }); }));
+// Renombres de barberos al guardar Ajustes. Los barberos son un texto separado por comas y todo lo demás guarda el nombre, así que
+// un renombre (misma cantidad de barberos y en esa posición un nombre nuevo que no estaba, en lugar de uno que ya no está) mueve lo que
+// depende del nombre: su cuenta, sus citas y bloqueos de hoy en adelante, su perfil, su foto y su galería. Las citas pasadas y los
+// pagos registrados en Finanzas se quedan con el nombre de entonces (historial). Altas, bajas y cambios de orden no renombran nada.
+const renombres = (antes, despues) => antes.length !== despues.length || new Set(antes).size !== antes.length || new Set(despues).size !== despues.length ? []
+  : antes.map((a, i) => [a, despues[i]]).filter(([a, b]) => a !== b && !despues.includes(a) && !antes.includes(b));
+const renombraBarbero = async (cl, id, a, b) => {
+  const hoy = HOY();
+  await cl.query('UPDATE usuarios SET barbero=$3 WHERE negocio_id=$1 AND barbero=$2', [id, a, b]);
+  await cl.query('UPDATE citas SET barbero=$3 WHERE negocio_id=$1 AND barbero=$2 AND fecha>=$4', [id, a, b, hoy]);
+  await cl.query('UPDATE bloqueos SET barbero=$3 WHERE negocio_id=$1 AND barbero=$2 AND fecha>=$4', [id, a, b, hoy]);
+  await cl.query('UPDATE trabajos SET barbero=$3 WHERE negocio_id=$1 AND barbero=$2', [id, a, b]);
+  // Perfil y foto son únicos por nombre: si quedó uno con el nombre nuevo (de alguien que ya no está en la lista), gana el del renombrado.
+  if ((await cl.query('SELECT 1 FROM perfiles WHERE negocio_id=$1 AND barbero=$2', [id, a])).rowCount) {
+    await cl.query('DELETE FROM perfiles WHERE negocio_id=$1 AND barbero=$2', [id, b]);
+    await cl.query('UPDATE perfiles SET barbero=$3 WHERE negocio_id=$1 AND barbero=$2', [id, a, b]);
+  }
+  if ((await cl.query("SELECT 1 FROM imagenes WHERE negocio_id=$1 AND tipo='barbero' AND ref=$2", [id, a])).rowCount) {
+    await cl.query("DELETE FROM imagenes WHERE negocio_id=$1 AND tipo='barbero' AND ref=$2", [id, b]);
+    await cl.query("UPDATE imagenes SET ref=$3 WHERE negocio_id=$1 AND tipo='barbero' AND ref=$2", [id, a, b]);
+  }
+};
 api.patch('/admin/ajustes', auth, wrap(async (q, s) => {
   const b = q.body, n = q.neg, v = k => String(b[k] !== undefined ? b[k] : (n[k] ?? '')).trim();
-  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'pro' ? 8 : 3, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null, correo = v('correo').toLowerCase().slice(0, 120);
+  // Límite de barberos: el plan Básico permite 3; la prueba gratis y el Pro, 8 (la prueba deja probar todo lo del Pro).
+  const lista = v('barberos').split(',').map(x => x.trim().slice(0, 30)).filter(Boolean), lim = n.plan === 'basico' ? 3 : 8, barberos = lista.join(','), ini = +v('hora_ini'), fin = +v('hora_fin'), maps = v('maps'), cierra = v('cierra'), avisos = wa(v('avisos')) || null, correo = v('correo').toLowerCase().slice(0, 120);
   if (lista.length > lim) return s.status(400).json({ error: `Tu plan permite hasta ${lim} barberos` });
   if (!v('nombre') || !barberos || !(ini >= 0 && fin <= 23 && ini < fin) || (maps && !/^https?:\/\//.test(maps)) || !/^([0-6](,[0-6])*)?$/.test(cierra) || (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) return s.status(400).json({ error: 'Revisa los datos' });
-  await pool.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9,correo=$10,lema=$11,acerca=$12,estacionamiento=$13,zonas=$14,instagram=$15 WHERE id=$16',
-    [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, correo || null, v('lema').slice(0, 120), v('acerca').slice(0, 1200), v('estacionamiento').slice(0, 200), v('zonas').slice(0, 300), v('instagram').replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40), n.id]);
-  s.json({ ok: true });
+  const ren = renombres(bars(n), lista), cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    await cl.query('UPDATE negocios SET nombre=$1,whatsapp=$2,direccion=$3,maps=$4,barberos=$5,hora_ini=$6,hora_fin=$7,cierra=$8,avisos=$9,correo=$10,lema=$11,acerca=$12,estacionamiento=$13,zonas=$14,instagram=$15 WHERE id=$16',
+      [v('nombre').slice(0, 60), wa(v('whatsapp')) || null, v('direccion').slice(0, 120), maps, barberos, ini, fin, cierra, avisos, correo || null, v('lema').slice(0, 120), v('acerca').slice(0, 1200), v('estacionamiento').slice(0, 200), v('zonas').slice(0, 300), v('instagram').replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40), n.id]);
+    for (const [a, z] of ren) await renombraBarbero(cl, n.id, a, z);
+    await cl.query('COMMIT');
+  } catch (x) {
+    await cl.query('ROLLBACK').catch(() => {});
+    // Choca con citas que ya estaban a nombre del nuevo (de un barbero anterior que se llamaba igual) en los mismos horarios.
+    if (x.code === '23505') return s.status(409).json({ error: 'Ya hay citas próximas a ese nombre en los mismos horarios. Usa otro nombre o mueve esas citas primero.' });
+    throw x;
+  } finally { cl.release(); }
+  s.json({ ok: true, renombrados: ren.map(([de, a]) => ({ de, a })) });
 }));
 
 api.post('/admin/item', auth, wrap(async (q, s) => {

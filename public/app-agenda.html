@@ -1,6 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Agenda</title><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#07090f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Agenda"><link rel="apple-touch-icon" href="/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=19"></head><body>
 <header><a class="logo" id="logo" href="#" style="text-decoration:none"></a><nav><a href="#agendar">Agendar</a><a href="#estilos">Estilos</a><a href="#productos">Productos</a><a href="#mis">Mi cuenta</a></nav></header>
 <main>
 <section id="agendar"><div id="flujo">
@@ -16,7 +16,7 @@
 <section id="productos" hidden><h2>Productos</h2><p>Pregunta por ellos en tu próxima visita.</p><div class="grid" id="pg"></div></section>
 <section id="mis" hidden><h2>Mi cuenta</h2><div id="mlist"></div></section>
 </main>
-<div class="barra" id="barra" hidden><div id="res"><b>Elige tu servicio</b>Paso 1 de 5</div><button id="go" disabled>Confirmar</button></div>
+<div class="barra" id="barra" hidden><div class="res" id="res"><b>Elige tu servicio</b><span>Paso 1 de 5</span></div><div class="tot" id="tot" aria-live="polite" hidden><small>Total</small><b id="tot-v"></b></div><button id="go" disabled>Confirmar</button></div>
 <footer style="max-width:760px;margin:auto;padding:0 24px 40px;color:var(--dim)" id="fn"></footer>
 <script src="/galeria.js?v=1"></script>
 <script>
@@ -54,6 +54,8 @@ $$('#srv .opt').forEach(b=>b.onclick=()=>{X.srv=E.find(e=>e.id==b.dataset.id);pi
 // Extras opcionales. El lavado no se cobra si el paquete elegido ya lo incluye (el servidor aplica la misma regla).
 const incl=e=>!!(e.lavado&&X.srv&&PQ[X.srv.id]);
 const nombresX=()=>(X.ex||[]).map(id=>' + '+((EX.find(e=>e.id===id)||{}).nombre||'')).join('');
+/* Resumen corto para la barra fija: con 2 o más extras solo se cuentan ("Elige tu corte + 2 extras"); la lista completa sale en la ficha al confirmar */
+const resumenS=()=>{const k=(X.ex||[]).length;return X.srv.nombre+(k>=2?' + '+k+' extras':nombresX())};
 const total=()=>X.srv?Number(X.srv.precio)+(X.ex||[]).reduce((a,id)=>a+Number((EX.find(e=>e.id===id)||{}).precio||0),0):0;
 function pintaX(){const el=$('#ex');if(!EX.length||!X.srv){el.innerHTML='';return}X.ex=(X.ex||[]).filter(id=>EX.some(e=>e.id===id&&!incl(e)));
 el.innerHTML='<p class="franja">Extras (opcional)</p><div class="chips">'+EX.map(e=>`<button type="button" data-x="${e.id}" aria-pressed="${incl(e)||X.ex.includes(e.id)}" ${incl(e)?'disabled style="text-decoration:none;opacity:.7"':''}>${esc(e.nombre)} · ${incl(e)?'incluido':'+'+m(e.precio)}</button>`).join('')+'</div>';
@@ -74,8 +76,10 @@ catch(e){el.innerHTML='<div class="vacio">No se pudieron cargar los horarios. Re
 const baja=s=>setTimeout(()=>{const e=$(s);if(e&&e.getBoundingClientRect().top>innerHeight*.6)e.scrollIntoView({behavior:'smooth',block:'start'})},120);
 function estado(){const n=$('#nom').value.trim(),t=$('#tel').value.replace(/\D/g,''),ok=[X.srv,X.bar,X.dia,X.hora,n&&t.length>=10];
 ['#p1','#p2','#p3','#p4','#p5'].forEach((p,k)=>$(p).classList.toggle('hecho',!!ok[k]));const falta=ok.findIndex(x=>!x);
-$('#res').innerHTML=X.srv?`<b>${esc(X.srv.nombre)}${esc(nombresX())} · ${m(total())}</b>${[X.bar==='cualquiera'?'Cualquier barbero':X.bar,X.dia&&fc(X.dia),h12(X.hora)].filter(Boolean).map(esc).join(' · ')||'Elige barbero, día y hora'}`:'<b>Elige tu servicio</b>Paso 1 de 5';
-if(falta===4&&X.hora)$('#res').innerHTML+=' · '+(!$('#nom').value.trim()?'falta tu nombre':'falta tu WhatsApp');$('#go').disabled=falta!==-1}
+const det=[X.bar==='cualquiera'?'Cualquier barbero':X.bar,X.dia&&fc(X.dia),h12(X.hora)].filter(Boolean).join(' · ')||'Elige barbero, día y hora',fx=falta===4&&X.hora?' · '+(!n?'falta tu nombre':'falta tu WhatsApp'):'';
+$('#res').innerHTML=X.srv?`<b title="${esc(X.srv.nombre+nombresX())}">${esc(resumenS())}</b><span>${esc(det+fx)}</span>`:'<b>Elige tu servicio</b><span>Paso 1 de 5</span>';
+/* El total va aparte, junto a Confirmar: nunca se recorta. Solo se reescribe si cambia (aria-live no lo repite en cada tecla). */
+const tv=X.srv?m(total()):'';$('#tot').hidden=!X.srv;if($('#tot-v').textContent!==tv)$('#tot-v').textContent=tv;$('#go').disabled=falta!==-1}
 const fmtTel=v=>{const d=v.replace(/\D/g,'').replace(/^52(?=\d{10}$)/,'').slice(0,10);return d.length>6?d.slice(0,3)+' '+d.slice(3,6)+' '+d.slice(6):d.length>3?d.slice(0,3)+' '+d.slice(3):d};
 $('#nom').oninput=estado;$('#tel').oninput=e=>{const p=e.target.selectionStart===e.target.value.length;e.target.value=fmtTel(e.target.value);if(p)e.target.selectionStart=e.target.value.length;$('#tel-e').hidden=true;estado()};
 $('#tel').onblur=()=>{const n=$('#tel').value.replace(/\D/g,'').length;$('#tel-e').hidden=!n||n===10};
@@ -142,7 +146,7 @@ if(f){const hh=v.querySelector('.hh');hh.innerHTML='<div class="vacio" style="ma
 hh.querySelectorAll('button[data-h]').forEach(b=>b.onclick=()=>{h=b.dataset.h;hh.querySelectorAll('button[data-h]').forEach(y=>y.setAttribute('aria-pressed',y===b));ok.disabled=false})}
 ok.onclick=async()=>{ok.disabled=true;try{await J('/reprogramar',{codigo:x.codigo,fecha:f,hora:h});toast('Listo: '+fd(f)+' a las '+h12(h));mis()}catch(e){toast(e.message);ok.disabled=false}}};pinta()}
 (async()=>{try{I=await J('/info')}catch(e){$('#flujo').innerHTML='<h2>Agenda</h2><div class="vacio">No se pudo cargar la agenda. Revisa tu conexión y recarga.</div>';return}
-if(I.tema==='ei'){for(const h of ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Manrope:wght@600;700;800&display=swap','/agenda-ei.css?v=1']){const l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.append(l)}$('meta[name=theme-color]').content='#f1efe9'}
+if(I.tema==='ei'){for(const h of ['https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Manrope:wght@600;700;800&display=swap','/agenda-ei.css?v=2']){const l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.append(l)}$('meta[name=theme-color]').content='#f1efe9'}
 document.title='Agenda · '+I.nombre;$('#logo').textContent=I.nombre;HORAS=Array.isArray(I.horas)?I.horas:Array.from({length:I.hora_fin-I.hora_ini+1},(_,k)=>String(I.hora_ini+k).padStart(2,'0')+':00');
 $('#fn').innerHTML=esc(I.nombre)+(I.direccion?' · '+esc(I.direccion):'')+(I.maps?' · <a style="color:var(--gold)" href="'+esc(I.maps)+'">Cómo llegar</a>':'')+(I.whatsapp?' · <a style="color:var(--gold)" href="https://wa.me/'+esc(I.whatsapp)+'">WhatsApp</a>':'')+' · <a style="color:var(--gold)" href="/'+encodeURIComponent(N)+'/privacidad">Aviso de privacidad</a>';$('#priv').href='/'+encodeURIComponent(N)+'/privacidad';
 $('#nom').value=S.nom||'';$('#tel').value=fmtTel(S.tel||'');

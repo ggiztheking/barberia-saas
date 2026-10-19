@@ -1,5 +1,11 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crear mi barbería</title><meta name="theme-color" content="#07090f"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
+<title>Crear mi barbería</title>
+<meta name="description" content="Crea gratis la página y la agenda en línea de tu barbería en un minuto: citas las 24 horas, recordatorios por WhatsApp, clientes y corte de caja. 14 días gratis, sin tarjeta.">
+<link rel="canonical" href="https://www.agendabarberias.xyz/registro">
+<meta property="og:type" content="website"><meta property="og:locale" content="es_MX"><meta property="og:site_name" content="Agenda de Barberías">
+<meta property="og:title" content="Crea tu barbería en línea en un minuto"><meta property="og:description" content="Página web, citas en línea 24/7, recordatorios por WhatsApp y corte de caja para tu barbería. 14 días gratis, sin tarjeta.">
+<meta property="og:url" content="https://www.agendabarberias.xyz/registro"><meta property="og:image" content="https://www.agendabarberias.xyz/img/landing/ia-fade.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="800"><meta property="og:image:alt" content="Ilustración de un barbero haciendo un desvanecido con máquina a un cliente con barba"><meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#07090f"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18"></head><body>
 <header><a class="logo" href="/" style="text-decoration:none">AGENDA DE BARBERÍAS</a></header><main>
 <h2>Crea tu barbería</h2><p>En un minuto tendrás tu página, tu agenda y tu panel de administrador.</p>
 <label for="n">Nombre de tu barbería</label><input id="n" placeholder="Ej. Estilo Internacional" autocomplete="organization">
@@ -15,6 +21,9 @@ $('#n').oninput=()=>{if(!manual)$('#s').value=slug($('#n').value);pv()};$('#s').
 const pv=()=>$('#pv').textContent=$('#s').value?location.host+'/'+$('#s').value:'';
 $('#go').onclick=async()=>{const r=$('#res');r.className='msg';r.textContent='';
 if(!$('#ok').checked){r.textContent='Para continuar acepta los términos y el aviso de privacidad.';return}
+// Misma regla que el servidor (+52, 52 o 521 al inicio se quitan): así un error de dedo no gasta uno de los intentos de registro.
+const w=$('#w').value.replace(/\D/g,''),w10=w.length===13&&w.startsWith('521')?w.slice(3):w.length===12&&w.startsWith('52')?w.slice(2):w;
+if(w10&&w10.length!==10){r.textContent='Escribe los 10 dígitos de tu WhatsApp.';$('#w').focus();return}
 try{const x=await fetch('/api/registro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:$('#n').value,slug:$('#s').value,whatsapp:$('#w').value,dueno:$('#d').value,email:$('#e').value,password:$('#p').value,acepta:true})}),d=await x.json();if(!x.ok)throw new Error(d.error);
 r.className='msg ok';r.innerHTML='<b>¡Listo! Tu barbería ya existe.</b><p>Ya iniciaste sesión. Entra a tu panel con tu correo y contraseña cuando quieras.</p><a class="btn" href="/'+d.slug+'/admin">Entrar a mi panel</a> <a class="btn alt" href="/'+d.slug+'">Ver mi página</a>'}
 catch(e){r.textContent=e.message}};
