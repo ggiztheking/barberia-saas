@@ -6,6 +6,8 @@ self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Pro
 self.addEventListener('fetch', e => {
   const r = e.request, u = new URL(r.url);
   if (r.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/')) return;
+  // Videos: el navegador los pide por partes (Range) y la caché no guarda respuestas parciales; van directo a la red.
+  if (r.destination === 'video' || r.headers.has('range')) return;
   if (r.mode === 'navigate') {
     e.respondWith(fetch(r).catch(() => caches.match('/offline.html')));
   } else {

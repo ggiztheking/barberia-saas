@@ -7,6 +7,10 @@ const h12 = h => (h % 12 || 12) + ':00 ' + (h < 12 || h === 24 ? 'AM' : 'PM');
 const json = o => JSON.stringify(o).replace(/</g, '\\u003c').replace(new RegExp('[\\u2028\\u2029]', 'g'), ' '); // seguro dentro de <script>
 const NUM = ['Cero', 'Una', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve', 'Diez', 'Once', 'Doce'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+// Portada en video: pantallas verticales (celular, tableta de pie) usan el video y el póster verticales; las anchas, los horizontales.
+const VERTICAL = '(max-aspect-ratio: 1/1)', ANCHA = '(min-aspect-ratio: 1001/1000)';
+// /img se guarda 7 días en caché: sube este número cada vez que cambies portada-ei.* para que se vea el archivo nuevo.
+const PV = '?v=1';
 
 // Primeras frases de un texto, hasta ~max caracteres, cortando en un punto.
 const resumen = (t, max = 170) => {
@@ -123,8 +127,9 @@ const dibuja = d => {
   const citas = abierto ? citasEnLinea(n) : '';
   const cerrados = (n.cierra || '').split(',').filter(x => x !== '').map(x => DIAS[+x]).filter(Boolean);
   const desde = paquetes.length ? Math.min(...paquetes.map(p => +p.precio)) : null;
-  // Portada: la que subió el dueño, las fotos reales de Estilo Internacional, o una ilustrativa para que ninguna página se vea vacía.
-  const heroReal = portada ? `/i/${portada}` : n.fotos ? '/img/hero.jpg' : null, hero = heroReal || '/img/tema/portada.jpg';
+  // Portada: la que subió el dueño, el video real de Estilo Internacional (con su póster), o una ilustrativa para que ninguna página se vea vacía.
+  const video = !portada && !!n.fotos;
+  const heroReal = portada ? `/i/${portada}` : n.fotos ? '/img/portada-ei.jpg' + PV : null, hero = heroReal || '/img/tema/portada.jpg';
   const [l1, ...l2] = String(n.lema || 'Tu estilo.').split(/(?<=\.)\s+/), lema2 = l2.join(' ');
   const sub = resumen(n.acerca), mas = String(n.acerca || '').length > sub.length + 10;
   const ciudad = /mérida/i.test(n.direccion || '') ? ' en Mérida' : '';
@@ -220,16 +225,17 @@ ${referencias.length >= 2 && referencias.length <= 8 ? `<div class="filters" ari
 <meta name="twitter:title" content="${esc(titulo)}"><meta name="twitter:description" content="${esc(descr)}">
 <link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=4">
-${hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=5">
+${video ? `<link rel="preload" as="image" href="${hero}" fetchpriority="high" media="${ANCHA}"><link rel="preload" as="image" href="/img/portada-ei-movil.jpg${PV}" fetchpriority="high" media="${VERTICAL}">`
+    : hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
 ${ld.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('\n')}</head><body>
 <a class="skip" href="#paquetes">Saltar a paquetes</a>
 <header class="header"><a class="brand" href="/${slug}" aria-label="${esc(n.nombre)} inicio"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}<small>BARBERÍA${ciudad ? ' · MÉRIDA' : ''}</small></span></a>
 <nav aria-label="Principal"><a href="#paquetes">Paquetes</a>${referencias.length ? '<a href="#estilos">Estilos</a>' : ''}${equipoHtml ? '<a href="#equipo">Equipo</a>' : ''}${galeria ? '<a href="#experiencia">Experiencia</a>' : ''}${faq ? '<a href="#preguntas">Preguntas</a>' : ''}<a href="#ubicacion">Encuéntranos</a></nav><a class="button small" href="#paquetes">Elige tu paquete ↗</a></header>
 ${abierto ? '' : '<div class="notice" role="status">Esta barbería no está recibiendo citas en línea por ahora.</div>'}
-<main><section class="hero${!portada && n.fotos ? ' hero-fija' : ''}"><img class="hero-photo" src="${esc(hero)}" alt="${heroReal ? `Interior de ${esc(n.nombre)}` : 'Imagen ilustrativa de una barbería'}" fetchpriority="high" decoding="async" width="1600" height="1000"><div class="hero-overlay"></div><div class="hero-copy">
+<main><section class="hero${video ? ' con-video' : ''}">${video ? `<picture><source media="${VERTICAL}" srcset="/img/portada-ei-movil.jpg${PV}" width="720" height="1280">` : ''}<img class="hero-photo" src="${esc(hero)}" alt="${heroReal ? `Interior de ${esc(n.nombre)}` : 'Imagen ilustrativa de una barbería'}" fetchpriority="high" decoding="async" width="1600" height="${video ? 900 : 1000}">${video ? `</picture><video class="hero-video" muted loop playsinline preload="none" disablepictureinpicture disableremoteplayback aria-hidden="true" tabindex="-1" data-vertical="/img/portada-ei-movil.mp4${PV}" data-ancha="/img/portada-ei.mp4${PV}"></video>` : ''}<div class="hero-overlay"></div><div class="hero-copy">
 <p class="eyebrow">${esc((n.zonas || n.direccion || 'Barbería').toUpperCase())}</p><h1>${esc(l1)}${lema2 ? `<br><em>${esc(lema2)}</em>` : ''}</h1>${sub ? `<p>${esc(sub).replace(/(?<=[.!?])\s+/g, '<br>')}</p>` : ''}
-<a class="button" href="#paquetes">Encuentra tu paquete <span>↗</span></a><div class="hero-details">${desde !== null ? `<span>DESDE <b>${money(desde)} MXN</b></span>` : ''}<span>HORARIO <b>${esc(horario.toUpperCase().replace(' A ', ' — '))}</b>${citas ? `<small class="citas-linea">${esc(citas)}</small>` : ''}</span>${estadoHtml ? `<span>HOY ${estadoHtml}</span>` : ''}</div></div><span class="hero-caption">${n.fotos || portada ? `FOTO REAL DE NUESTRO LOCAL / ${esc(n.nombre.toUpperCase())}` : 'IMAGEN ILUSTRATIVA'}</span></section>
+<a class="button" href="#paquetes">Encuentra tu paquete <span>↗</span></a><div class="hero-details">${desde !== null ? `<span>DESDE <b>${money(desde)} MXN</b></span>` : ''}<span>HORARIO <b>${esc(horario.toUpperCase().replace(' A ', ' — '))}</b>${citas ? `<small class="citas-linea">${esc(citas)}</small>` : ''}</span>${estadoHtml ? `<span>HOY ${estadoHtml}</span>` : ''}</div></div><span class="hero-caption">${video || portada ? `FOTO REAL DE NUESTRO LOCAL / ${esc(n.nombre.toUpperCase())}` : 'IMAGEN ILUSTRATIVA'}</span>${video ? '<button class="hero-pausa" type="button" hidden>Pausar video</button>' : ''}</section>
 <div class="ticker"><span>CORTE</span><i>✳</i><span>BARBA</span><i>✳</i><span>ACTITUD</span><i>✳</i><span>${esc(n.nombre.toUpperCase())}</span></div>
 <section class="section" id="paquetes"><div class="heading"><div><p class="eyebrow">01 / ELIGE CÓMO RENOVARTE</p><h2>El look cambia.<br><em>El estilo es tuyo.</em></h2></div>
 <p>${paquetes.length ? `${NUM[paquetes.length] || paquetes.length} ${paquetes.length === 1 ? 'forma' : 'formas'} de darle un nuevo aire a tu día.<br>` : ''}Precios en pesos mexicanos. Sin cargos por servicios ya incluidos.</p></div>
@@ -257,7 +263,32 @@ var fb=$$('.filters button');fb.forEach(function(b){b.onclick=function(){fb.forE
 $$('.styles article').forEach(function(a){a.hidden=b.dataset.f!=='todos'&&a.dataset.s!==b.dataset.f})}});
 var lb=$('#lb');if(lb){$$('.image-button').forEach(function(b){b.onclick=function(){$('#lb-img').src=b.dataset.src;$('#lb-img').alt=b.dataset.cap;$('#lb-cap').textContent=b.dataset.cap;lb.showModal()}});
 $('#lb-x').onclick=function(){lb.close()};lb.onclick=function(e){if(e.target===lb)lb.close()}}
-if('serviceWorker' in navigator)addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})();
+${video ? `var hv=$('.hero-video'),hp=$('.hero-pausa'),hc=$('.hero-caption'),cx=navigator.connection;
+// Portada en video: solo si el visitante no pidió menos movimiento ni ahorro de datos y su red no es lenta; si no carga, no alcanza o el navegador no deja reproducir, se queda la foto (póster).
+if(hv&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!(cx&&(cx.saveData||/(^|-)[23]g$/.test(cx.effectiveType||'')||cx.downlink&&cx.downlink<1))){
+var quieto=false,seVe=false,visto=false,rendido=false,tm,plazo,mq=matchMedia(${json(VERTICAL)});
+var corre=function(){var p=hv.play();if(p&&p.catch)p.catch(function(){})};
+var suelta=function(){clearTimeout(plazo);plazo=0;hv.pause();hv.removeAttribute('src');hv.load()};
+// Segundos ya descargados por delante de lo que se está viendo.
+var margen=function(){var b=hv.buffered,t=hv.currentTime;for(var i=0;i<b.length;i++)if(b.start(i)<=t+.1&&b.end(i)>=t)return b.end(i)-t;return 0};
+// Se muestra cuando puede seguir sin cortes (el navegador lo dice, o hay 4 s bajados por delante): en una red lenta se queda la foto en vez de un video a tirones.
+var muestra=function(){if(visto||rendido||hv.paused||!(hv.readyState>=4||margen()>=4))return;visto=true;hv.classList.add('on');hp.hidden=false;hc.textContent=hc.textContent.replace('FOTO REAL','VIDEO REAL')};
+// Video vertical o ancho según la orientación; al girar el celular o la tableta cambia al otro y, mientras carga, vuelve la foto que corresponde.
+var elige=function(){var u=mq.matches?hv.dataset.vertical:hv.dataset.ancha,a=hv.getAttribute('src');if(rendido||a===u||!a&&!seVe)return;
+clearTimeout(plazo);plazo=0;visto=false;hv.classList.remove('on');hp.hidden=!quieto;hc.textContent=hc.textContent.replace('VIDEO REAL','FOTO REAL');hv.src=u;if(seVe&&!quieto)corre()};
+// Si a los 10 s de empezar todavía no puede verse bien, deja de bajarlo y se queda la foto.
+hv.addEventListener('playing',function(){if(!visto&&!plazo)plazo=setTimeout(function(){if(!visto){rendido=true;suelta()}},10000);muestra()});
+hv.addEventListener('canplaythrough',muestra);hv.addEventListener('progress',muestra);hv.addEventListener('timeupdate',muestra);
+// Carga y reproduce solo con la portada 0.3 s en pantalla (si la página abre en un ancla como #ubicacion, o el visitante baja rápido, no baja nada);
+// fuera de pantalla se pausa, y si aún no se había visto deja de bajarlo.
+var mira=function(e){seVe=e[e.length-1].isIntersecting;clearTimeout(tm);if(quieto||rendido)return;
+if(seVe)tm=setTimeout(function(){if(seVe&&!quieto){if(hv.getAttribute('src'))corre();else elige()}},300);else{hv.pause();if(!visto&&hv.getAttribute('src'))suelta()}};
+var arranca=function(){hv.muted=true;if(mq.addEventListener)mq.addEventListener('change',elige);else if(mq.addListener)mq.addListener(elige);
+if(typeof IntersectionObserver==='function')new IntersectionObserver(mira).observe(hv);else{seVe=true;elige()}};
+hp.onclick=function(){quieto=!hv.paused;if(quieto)hv.pause();else if(hv.getAttribute('src'))corre();else elige();hp.textContent=quieto?'Reproducir video':'Pausar video'};
+// Hasta después de la carga: no compite con la foto ni con las fuentes.
+if(document.readyState==='complete')arranca();else addEventListener('load',arranca)}
+` : ''}if('serviceWorker' in navigator)addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})();
 </script></body></html>`;
 };
 

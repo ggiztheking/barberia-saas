@@ -318,7 +318,7 @@ test('horario de citas en línea junto al horario del local (mismo formato que l
   assert.ok(!sinTexto.includes('Citas en línea'));
   // Si la barbería no recibe citas en línea, no se anuncian.
   assert.deepEqual(citas(pagina({ horario_texto: '9:30 AM a 11:00 PM' }, { abierto: false })), []);
-  assert.ok(conTexto.includes('/tema-ei.css?v=4'), 'la hoja de estilos nueva no sale de la caché');
+  assert.ok(conTexto.includes('/tema-ei.css?v=5'), 'la hoja de estilos nueva no sale de la caché');
 });
 
 test('la línea de citas en línea coincide con los espacios que da la agenda del servidor', { skip: sinBase }, async () => {
@@ -342,4 +342,182 @@ test('tema-ei.css: el naranja de texto sobre fondo claro tiene contraste ≥4.5:
   for (const fondo of ['#f1efe9', '#e7e4da', '#e4e3dc']) assert.ok(contraste(texto, fondo) >= 4.5, `${texto} sobre ${fondo}: ${contraste(texto, fondo).toFixed(2)}`);
   // Ningún texto (color:) usa el naranja claro #cc7232; el contorno de foco y los fondos naranja no son texto.
   assert.ok(!/(?:^|[;{\s])color:\s*#cc7232/i.test(css), 'texto con #cc7232');
+});
+
+// ---- Portada en video (Estilo Internacional): HTML, script del navegador y archivos ----
+// Corre el <script> de la página con un DOM mínimo: el <video> (que se pausa y se vacía al cambiar de archivo, como el real),
+// el botón, la leyenda, matchMedia, IntersectionObserver, la red y relojes falsos.
+const portadaVideo = (h, { reducido = false, ahorro = false, red, downlink, vertical = false, io = true, cargada = true } = {}) => {
+  const script = h.match(/<script>\n([\s\S]*?)<\/script><\/body>/)[1];
+  const tag = h.match(/<video class="hero-video"[^>]*>/)[0], dato = k => tag.match(new RegExp(`data-${k}="([^"]+)"`))[1];
+  const llamadas = [], oyentes = {}, cambios = [], carga = [];
+  let relojes = [], idReloj = 0, ahora = 0;
+  const hv = { dataset: { vertical: dato('vertical'), ancha: dato('ancha') }, paused: true, muted: false, readyState: 0, currentTime: 0, adelante: 0, clases: new Set(), attrs: {},
+    get src() { return this.attrs.src || ''; }, set src(v) { this.attrs.src = v; this.paused = true; this.readyState = 0; this.currentTime = 0; this.adelante = 0; },
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, removeAttribute(k) { delete this.attrs[k]; },
+    load() { llamadas.push('load'); this.paused = true; this.readyState = 0; this.adelante = 0; },
+    get buffered() { const t = this.currentTime, a = this.adelante; return a ? { length: 1, start: () => t, end: () => t + a } : { length: 0 }; },
+    classList: { add: c => hv.clases.add(c), remove: c => hv.clases.delete(c) }, addEventListener: (t, f) => { oyentes[t] = f; },
+    play() { llamadas.push('play'); this.paused = false; return Promise.resolve(); }, pause() { llamadas.push('pause'); this.paused = true; } };
+  const hp = { hidden: true, textContent: 'Pausar video' };
+  const hc = { textContent: h.match(/<span class="hero-caption">([^<]*)<\/span>/)[1] };
+  const mq = { matches: vertical, addEventListener: (t, f) => cambios.push(f) };
+  let mira;
+  const conexion = ahorro || red || downlink ? { connection: { saveData: ahorro, effectiveType: red, downlink } } : {};
+  const ctx = { document: { readyState: cargada ? 'complete' : 'interactive', querySelector: s => ({ '.hero-video': hv, '.hero-pausa': hp, '.hero-caption': hc }[s] || null), querySelectorAll: () => [] },
+    navigator: conexion, addEventListener: (t, f) => { if (t === 'load') carga.push(f); },
+    setTimeout: (f, ms) => { relojes.push({ id: ++idReloj, f, en: ahora + ms }); return idReloj; }, clearTimeout: id => { relojes = relojes.filter(r => r.id !== id); },
+    matchMedia: q => (/reduced-motion/.test(q) ? { matches: reducido } : q === '(max-aspect-ratio: 1/1)' ? mq : { matches: false }) };
+  if (io) ctx.IntersectionObserver = function (cb) { mira = cb; this.observe = () => {}; };
+  vm.runInNewContext(script, ctx);
+  const pasa = ms => { ahora += ms; for (const r of relojes.filter(x => x.en <= ahora)) { relojes = relojes.filter(x => x !== r); r.f(); } };
+  const evento = k => oyentes[k] && oyentes[k]();
+  return { hv, hp, hc, llamadas, pasa,
+    carga: () => carga.forEach(f => f()),
+    ve: (...v) => mira && mira(v.map(x => ({ isIntersecting: x }))), // sin video no hay observador
+    // Simula que el video empezó a correr y cuántos segundos lleva bajados por delante.
+    corre: (estado, adelante = 0) => { hv.readyState = estado; hv.adelante = adelante; evento('playing'); evento('progress'); },
+    gira: v => { mq.matches = v; cambios.forEach(f => f()); } };
+};
+
+test('portada en video: Estilo Internacional sale con video, póster por orientación y botón para pausar', () => {
+  const h = pagina({ fotos: true });
+  assert.match(h, /<section class="hero con-video">/);
+  assert.match(h, /<video class="hero-video" muted loop playsinline preload="none"[^>]* aria-hidden="true"[^>]*data-vertical="\/img\/portada-ei-movil\.mp4\?v=\d+" data-ancha="\/img\/portada-ei\.mp4\?v=\d+"><\/video>/);
+  assert.ok(!/<video[^>]*\sautoplay/.test(h), 'el script decide si se reproduce (menos movimiento, ahorro de datos, red lenta)');
+  assert.match(h, /<picture><source media="\(max-aspect-ratio: 1\/1\)" srcset="\/img\/portada-ei-movil\.jpg\?v=\d+" width="720" height="1280"><img class="hero-photo" src="\/img\/portada-ei\.jpg\?v=\d+"[^>]*fetchpriority="high"[^>]*width="1600" height="900"><\/picture>/);
+  assert.match(h, /<link rel="preload" as="image" href="\/img\/portada-ei\.jpg\?v=\d+" fetchpriority="high" media="\(min-aspect-ratio: 1001\/1000\)">/, 'precarga del póster ancho solo en pantallas anchas');
+  assert.match(h, /<link rel="preload" as="image" href="\/img\/portada-ei-movil\.jpg\?v=\d+" fetchpriority="high" media="\(max-aspect-ratio: 1\/1\)">/, 'precarga del póster vertical solo en pantallas verticales');
+  assert.ok(h.includes('<span class="hero-caption">FOTO REAL DE NUESTRO LOCAL / BARBERÍA PRUEBA</span>'), 'mientras no corre el video, lo que se ve es la foto');
+  assert.ok(h.includes('<button class="hero-pausa" type="button" hidden>Pausar video</button>'));
+  assert.match(h, /<meta property="og:image" content="http:\/\/x\/img\/portada-ei\.jpg\?v=\d+">/, 'el póster nítido también es la imagen al compartir');
+  // Los cuatro archivos llevan la misma versión, para que un cambio no quede escondido en la caché de 7 días.
+  assert.equal(new Set(h.match(/portada-ei(?:-movil)?\.(?:jpg|mp4)\?v=\d+/g).map(u => u.split('?')[1])).size, 1);
+});
+
+test('portada en video: con portada subida por el dueño, o sin fotos reales, no hay video', () => {
+  const subida = pagina({ fotos: true }, { portada: 7 });
+  assert.ok(!subida.includes('<video') && !subida.includes('hero-pausa') && !subida.includes('con-video') && !subida.includes('portada-ei'));
+  assert.ok(subida.includes('<img class="hero-photo" src="/i/7"') && subida.includes('FOTO REAL DE NUESTRO LOCAL'));
+  assert.ok(subida.includes('<link rel="preload" as="image" href="/i/7" fetchpriority="high">'));
+  const sin = pagina();
+  assert.ok(!sin.includes('<video') && !sin.includes('<picture>') && sin.includes('/img/tema/portada.jpg') && sin.includes('IMAGEN ILUSTRATIVA'));
+});
+
+test('portada en video: espera a la carga y a que la portada se vea, y aparece solo cuando ya no se va a cortar', () => {
+  const h = pagina({ fotos: true });
+  const ancha = h.match(/data-ancha="([^"]+)"/)[1], vertical = h.match(/data-vertical="([^"]+)"/)[1];
+  // Antes del load no hace nada: no compite con la foto ni con las fuentes.
+  const c = portadaVideo(h, { cargada: false });
+  c.ve(true); c.pasa(300);
+  assert.deepEqual(c.llamadas, []); assert.equal(c.hv.src, '', 'antes del load ni siquiera observa la portada');
+  c.carga(); c.ve(true); c.pasa(300); assert.equal(c.hv.src, ancha, 'tras el load y con la portada en pantalla, el video ancho');
+
+  const a = portadaVideo(h);
+  assert.equal(a.hv.muted, true, 'sin sonido para que el navegador deje reproducirlo solo');
+  a.ve(true); assert.equal(a.hv.src, '', 'espera 0.3 s en pantalla antes de bajar nada');
+  a.pasa(300); assert.equal(a.hv.src, ancha); assert.deepEqual(a.llamadas, ['play']);
+  a.corre(3, 2); assert.ok(!a.hv.clases.has('on'), 'con poco búfer sigue la foto');
+  assert.equal(a.hp.hidden, true); assert.match(a.hc.textContent, /^FOTO REAL/);
+  a.corre(3, 4.5); assert.ok(a.hv.clases.has('on'), 'con 4 s bajados por delante aparece el video');
+  assert.equal(a.hp.hidden, false); assert.match(a.hc.textContent, /^VIDEO REAL DE NUESTRO LOCAL/);
+  a.ve(false); assert.equal(a.llamadas.at(-1), 'pause', 'fuera de pantalla se pausa');
+  assert.equal(a.hv.src, ancha, 'si ya se vio, se queda el archivo para seguir al volver');
+  a.ve(true); a.pasa(300); assert.equal(a.llamadas.at(-1), 'play');
+  // Varias entradas en un mismo aviso: cuenta la última (el estado actual).
+  a.ve(false, true); a.pasa(300); assert.equal(a.hv.paused, false);
+
+  // El navegador avisa que ya puede seguir sin cortes.
+  const b = portadaVideo(h); b.ve(true); b.pasa(300); b.corre(4); assert.ok(b.hv.clases.has('on'));
+  assert.equal(portadaVideo(h, { vertical: true }).hv.dataset.vertical, vertical);
+});
+
+test('portada en video: el botón pausa de verdad, y si la portada sale de pantalla antes de verse deja de bajar el video', () => {
+  const h = pagina({ fotos: true });
+  const a = portadaVideo(h); a.ve(true); a.pasa(300); a.corre(4);
+  a.hp.onclick();
+  assert.equal(a.hp.textContent, 'Reproducir video'); assert.equal(a.hv.paused, true);
+  const n = a.llamadas.length; a.ve(false); a.ve(true); a.pasa(300);
+  assert.deepEqual(a.llamadas.slice(n), [], 'si el visitante lo pausó, volver a verlo no lo reproduce');
+  a.hp.onclick(); assert.equal(a.hp.textContent, 'Pausar video'); assert.equal(a.hv.paused, false);
+
+  // Pausado por el visitante antes de mostrarse: los datos que lleguen no lo destapan.
+  const q = portadaVideo(h); q.ve(true); q.pasa(300); q.hp.onclick(); q.corre(4, 6);
+  assert.ok(!q.hv.clases.has('on'), 'pausado no aparece');
+
+  // Abre en un ancla (#ubicacion): el salto suave pasa por la portada menos de 0.3 s y no se baja nada.
+  const ancla = portadaVideo(h); ancla.ve(true); ancla.pasa(150); ancla.ve(false); ancla.pasa(1000);
+  assert.equal(ancla.hv.src, ''); assert.deepEqual(ancla.llamadas, ['pause']);
+  // Se veía, empezó a bajar y salió de pantalla antes de mostrarse: suelta el archivo y lo vuelve a pedir al regresar.
+  const sale = portadaVideo(h); sale.ve(true); sale.pasa(300); sale.corre(3, 1); sale.ve(false);
+  assert.equal(sale.hv.getAttribute('src'), null); assert.equal(sale.llamadas.at(-1), 'load', 'se corta la descarga');
+  sale.ve(true); sale.pasa(300); assert.ok(sale.hv.src.includes('portada-ei.mp4')); assert.equal(sale.llamadas.at(-1), 'play');
+  // Red que no alcanza: a los 10 s sin poder verse bien, se rinde y se queda la foto.
+  const lenta = portadaVideo(h); lenta.ve(true); lenta.pasa(300); lenta.corre(3, 1); lenta.pasa(10000);
+  assert.equal(lenta.hv.getAttribute('src'), null); assert.ok(!lenta.hv.clases.has('on'));
+  lenta.ve(false); lenta.ve(true); lenta.pasa(300); assert.equal(lenta.hv.getAttribute('src'), null, 'ya no lo vuelve a intentar');
+});
+
+test('portada en video: al girar cambia de video, vuelve la foto mientras carga y sigue reproduciendo', () => {
+  const h = pagina({ fotos: true });
+  const ancha = h.match(/data-ancha="([^"]+)"/)[1], vertical = h.match(/data-vertical="([^"]+)"/)[1];
+  const a = portadaVideo(h); a.ve(true); a.pasa(300); a.corre(4);
+  assert.ok(a.hv.clases.has('on')); assert.match(a.hc.textContent, /^VIDEO REAL/);
+  const n = a.llamadas.length; a.gira(true);
+  assert.equal(a.hv.src, vertical); assert.deepEqual(a.llamadas.slice(n), ['play'], 'el video nuevo se reproduce');
+  assert.ok(!a.hv.clases.has('on')); assert.equal(a.hp.hidden, true); assert.match(a.hc.textContent, /^FOTO REAL/, 'mientras carga se ve la foto y lo dice');
+  a.corre(4); assert.ok(a.hv.clases.has('on')); assert.match(a.hc.textContent, /^VIDEO REAL/);
+  const m = a.llamadas.length; a.gira(true); assert.equal(a.llamadas.length, m, 'misma orientación: no recarga');
+  // Pausado por el visitante: al girar cambia el archivo, no lo reproduce y el botón sigue para reanudar.
+  a.hp.onclick(); const k = a.llamadas.length; a.gira(false);
+  assert.equal(a.hv.src, ancha); assert.deepEqual(a.llamadas.slice(k), []); assert.equal(a.hp.hidden, false);
+  // Fuera de pantalla y sin archivo: girar no baja nada; al volver, elige el de la orientación actual.
+  const f = portadaVideo(h); f.gira(true); assert.equal(f.hv.src, '');
+  f.ve(true); f.pasa(300); assert.equal(f.hv.src, vertical);
+  assert.deepEqual(portadaVideo(h, { io: false }).llamadas, ['play'], 'sin IntersectionObserver se reproduce de una vez');
+});
+
+test('portada en video: sin video si el visitante pide menos movimiento, ahorro de datos o su red es lenta', () => {
+  const h = pagina({ fotos: true });
+  for (const pide of [{ reducido: true }, { ahorro: true }, { red: '3g' }, { red: '2g' }, { red: 'slow-2g' }, { red: '4g', downlink: 0.8 }]) {
+    const b = portadaVideo(h, pide);
+    b.carga(); b.ve(true); b.pasa(300);
+    assert.equal(b.hv.src, '', 'sin video: ' + JSON.stringify(pide)); assert.deepEqual(b.llamadas, []);
+    assert.equal(b.hp.hidden, true); assert.match(b.hc.textContent, /^FOTO REAL/);
+  }
+  for (const downlink of [1.2, 10]) {
+    const r = portadaVideo(h, { red: '4g', downlink }); r.ve(true); r.pasa(300);
+    assert.ok(r.hv.src.includes('portada-ei.mp4'), `con ${downlink} Mbps lo intenta (si no alcanza, se rinde a los 10 s)`);
+  }
+});
+
+test('portada en video: el service worker no toca los videos y el botón queda arriba (siempre en la primera pantalla)', () => {
+  const sw = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+  const salta = sw.indexOf("if (r.destination === 'video' || r.headers.has('range')) return;");
+  assert.ok(salta > 0 && salta < sw.indexOf('e.respondWith'), 'video y peticiones Range van directo a la red');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'tema-ei.css'), 'utf8');
+  const regla = css.match(/\n\.hero-pausa \{([^}]*)\}/)[1];
+  assert.match(regla, /top:\s*24px/); assert.ok(!/bottom:/.test(regla), 'no abajo: el hero puede ser más alto que la ventana');
+});
+
+test('portada en video: los archivos existen, pesan poco y el MP4 empieza a reproducirse sin bajarse completo', () => {
+  const img = path.join(__dirname, '..', 'public', 'img');
+  for (const f of ['portada-ei.mp4', 'portada-ei-movil.mp4']) {
+    const b = fs.readFileSync(path.join(img, f));
+    assert.ok(b.length < 4 * 1024 * 1024, `${f} pesa ${(b.length / 1048576).toFixed(1)} MB`);
+    assert.equal(b.toString('latin1', 4, 8), 'ftyp', f + ' es MP4');
+    const moov = b.indexOf('moov', 0, 'latin1'), mdat = b.indexOf('mdat', 0, 'latin1');
+    assert.ok(moov > 0 && moov < mdat, f + ': el índice (moov) va antes de los datos (faststart)');
+  }
+  for (const f of ['portada-ei.jpg', 'portada-ei-movil.jpg']) assert.ok(fs.statSync(path.join(img, f)).size < 300 * 1024, f);
+});
+
+test('portada en video: el servidor entrega el video por partes (Range), como lo piden Safari y Chrome', { skip: sinBase }, async () => {
+  const r = await fetch(base + '/img/portada-ei.mp4?v=1', { headers: { Range: 'bytes=0-1023' } });
+  assert.equal(r.status, 206);
+  assert.match(r.headers.get('content-type'), /video\/mp4/);
+  assert.equal((await r.arrayBuffer()).byteLength, 1024);
+  for (const u of ['/img/portada-ei-movil.mp4', '/img/portada-ei.jpg', '/img/portada-ei-movil.jpg']) assert.equal((await fetch(base + u)).status, 200, u);
+  const h = await (await fetch(base + '/estilo-internacional')).text();
+  assert.ok(h.includes('<video class="hero-video"'), 'Estilo Internacional ya muestra el video');
 });
