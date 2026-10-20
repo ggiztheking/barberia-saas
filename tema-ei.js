@@ -11,6 +11,10 @@ const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', '
 const VERTICAL = '(max-aspect-ratio: 1/1)', ANCHA = '(min-aspect-ratio: 1001/1000)';
 // /img se guarda 7 días en caché: sube este número cada vez que cambies portada-ei.* para que se vea el archivo nuevo.
 const PV = '?v=1';
+// Logo de Estilo Internacional: medallón recortado de su logo, con el aro dorado cerrado (logo-ei.webp), e íconos cuadrados crema
+// para la pestaña, el iPhone y la app (también en la agenda, vía /info, y en el manifiesto). Sube LV si cambias logo-ei.*.
+const LV = '?v=1';
+const logoDe = n => (n && n.fotos ? { img: '/img/logo-ei.webp' + LV, icono: '/img/logo-ei-192.png' + LV, grande: '/img/logo-ei-512.png' + LV, apple: '/img/logo-ei-180.png' + LV } : null);
 
 // Primeras frases de un texto, hasta ~max caracteres, cortando en un punto.
 const resumen = (t, max = 170) => {
@@ -128,7 +132,10 @@ const dibuja = d => {
   const cerrados = (n.cierra || '').split(',').filter(x => x !== '').map(x => DIAS[+x]).filter(Boolean);
   const desde = paquetes.length ? Math.min(...paquetes.map(p => +p.precio)) : null;
   // Portada: la que subió el dueño, el video real de Estilo Internacional (con su póster), o una ilustrativa para que ninguna página se vea vacía.
-  const video = !portada && !!n.fotos;
+  const video = !portada && !!n.fotos, logo = logoDe(n);
+  // Marca del encabezado y del pie: el logo si la barbería tiene el suyo, si no, sus iniciales.
+  const marca = extra => logo ? `<img class="brand-logo" src="${logo.img}" alt="" width="60" height="60" decoding="async"${extra}>`
+    : `<span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span>`;
   const heroReal = portada ? `/i/${portada}` : n.fotos ? '/img/portada-ei.jpg' + PV : null, hero = heroReal || '/img/tema/portada.jpg';
   const [l1, ...l2] = String(n.lema || 'Tu estilo.').split(/(?<=\.)\s+/), lema2 = l2.join(' ');
   const sub = resumen(n.acerca), mas = String(n.acerca || '').length > sub.length + 10;
@@ -146,7 +153,7 @@ const dibuja = d => {
     : 'Las imágenes marcadas como generadas con IA no son trabajos realizados por nuestra barbería. ';
   const premium = paquetes.length >= 3 ? paquetes.reduce((a, p) => (+p.precio > +a.precio ? p : a), paquetes[0]).id : null;
 
-  const ld = [{ '@context': 'https://schema.org', '@type': 'BarberShop', name: n.nombre, url, ...(og ? { image: og } : {}), description: descr,
+  const ld = [{ '@context': 'https://schema.org', '@type': 'BarberShop', name: n.nombre, url, ...(og ? { image: og } : {}), ...(logo ? { logo: base + logo.grande } : {}), description: descr,
     ...(n.direccion ? { address: { '@type': 'PostalAddress', streetAddress: n.direccion, addressCountry: 'MX' } } : {}),
     ...(n.whatsapp ? { telephone: '+' + String(n.whatsapp).replace(/\D/g, '') } : {}), ...(n.maps ? { hasMap: n.maps } : {}),
     ...(desde !== null ? { priceRange: `${money(desde)}–${money(Math.max(...paquetes.map(p => +p.precio)))} MXN` } : {}),
@@ -223,14 +230,14 @@ ${referencias.length >= 2 && referencias.length <= 8 ? `<div class="filters" ari
 <title>${esc(titulo)}</title><meta name="description" content="${esc(descr)}"><meta name="theme-color" content="#f1efe9"><link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="website"><meta property="og:locale" content="es_MX"><meta property="og:url" content="${esc(url)}"><meta property="og:title" content="${esc(titulo)}"><meta property="og:description" content="${esc(descr)}">${og ? `<meta property="og:image" content="${esc(og)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${esc(og)}">` : '<meta name="twitter:card" content="summary">'}
 <meta name="twitter:title" content="${esc(titulo)}"><meta name="twitter:description" content="${esc(descr)}">
-<link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">
+<link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="${logo ? logo.apple : '/icon-192.png'}"><link rel="icon" href="${logo ? logo.icono : '/icon-192.png'}"${logo ? ' sizes="192x192" type="image/png"' : ''}>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=5">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=6">
 ${video ? `<link rel="preload" as="image" href="${hero}" fetchpriority="high" media="${ANCHA}"><link rel="preload" as="image" href="/img/portada-ei-movil.jpg${PV}" fetchpriority="high" media="${VERTICAL}">`
     : hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
 ${ld.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('\n')}</head><body>
 <a class="skip" href="#paquetes">Saltar a paquetes</a>
-<header class="header"><a class="brand" href="/${slug}" aria-label="${esc(n.nombre)} inicio"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}<small>BARBERÍA${ciudad ? ' · MÉRIDA' : ''}</small></span></a>
+<header class="header"><a class="brand" href="/${slug}" aria-label="${esc(n.nombre)} inicio">${marca('')}<span>${esc(n.nombre)}<small>BARBERÍA${ciudad ? ' · MÉRIDA' : ''}</small></span></a>
 <nav aria-label="Principal"><a href="#paquetes">Paquetes</a>${referencias.length ? '<a href="#estilos">Estilos</a>' : ''}${equipoHtml ? '<a href="#equipo">Equipo</a>' : ''}${galeria ? '<a href="#experiencia">Experiencia</a>' : ''}${faq ? '<a href="#preguntas">Preguntas</a>' : ''}<a href="#ubicacion">Encuéntranos</a></nav><a class="button small" href="#paquetes">Elige tu paquete ↗</a></header>
 ${abierto ? '' : '<div class="notice" role="status">Esta barbería no está recibiendo citas en línea por ahora.</div>'}
 <main><section class="hero${video ? ' con-video' : ''}">${video ? `<picture><source media="${VERTICAL}" srcset="/img/portada-ei-movil.jpg${PV}" width="720" height="1280">` : ''}<img class="hero-photo" src="${esc(hero)}" alt="${heroReal ? `Interior de ${esc(n.nombre)}` : 'Imagen ilustrativa de una barbería'}" fetchpriority="high" decoding="async" width="1600" height="${video ? 900 : 1000}">${video ? `</picture><video class="hero-video" muted loop playsinline preload="none" disablepictureinpicture disableremoteplayback aria-hidden="true" tabindex="-1" data-vertical="/img/portada-ei-movil.mp4${PV}" data-ancha="/img/portada-ei.mp4${PV}"></video>` : ''}<div class="hero-overlay"></div><div class="hero-copy">
@@ -246,7 +253,7 @@ ${pasos}${sellos}${estilos}${equipoHtml}${espacio}${galeria}${trabajo}${acerca}$
 <div class="address">${n.direccion ? `<p>${esc(n.direccion).replace(/,\s*/g, '<br>')}</p>` : ''}<p>HORARIO<br><strong>${esc(horario)}</strong>${citas ? `<br><small class="citas-linea">${esc(citas)}</small>` : ''}${cerrados.length ? `<br><small>Cerrado: ${esc(cerrados.join(', '))}</small>` : ''}${estadoHtml ? `<br>${estadoHtml}` : ''}</p></div>
 ${n.maps ? `<a class="button" rel="noopener noreferrer" target="_blank" href="${esc(n.maps)}">Cómo llegar · Google Maps ↗</a>` : ''}${tel}${ig}${resena}${n.estacionamiento ? `<p class="fine">Estacionamiento: ${esc(n.estacionamiento)}</p>` : ''}
 <p class="fine">Elige tu paquete, tu barbero y tu horario en la agenda. Tu cita queda apartada al confirmar.</p></div>${foto}</section></main>
-<footer><a class="brand" href="/${slug}"><span class="monogram">${esc(n.nombre.split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span><span>${esc(n.nombre)}</span></a><span>${esc(n.lema || '')}</span><a href="/${slug}/privacidad">Aviso de privacidad</a><small>© ${new Date().getFullYear()} ${esc(n.nombre)}</small></footer>
+<footer><a class="brand" href="/${slug}">${marca(' loading="lazy"')}<span>${esc(n.nombre)}</span></a><span>${esc(n.lema || '')}</span><a href="/${slug}/privacidad">Aviso de privacidad</a><small>© ${new Date().getFullYear()} ${esc(n.nombre)}</small></footer>
 <a class="mobile-book button" href="#paquetes">Elige tu paquete y reserva ↗</a>
 <script>
 (function(){var $=function(s,r){return(r||document).querySelector(s)},$$=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};
@@ -294,4 +301,5 @@ if(document.readyState==='complete')arranca();else addEventListener('load',arran
 
 module.exports = dibuja;
 module.exports.estadoAhora = estadoAhora; // para probar el cálculo de abierto/cerrado con horas fijas
+module.exports.logoDe = logoDe; // el mismo logo para /info (agenda) y el manifiesto de la app
 module.exports.fotosTema = () => [...HAY]; // fotos ilustrativas disponibles (las que existen en public/img/tema)

@@ -580,7 +580,7 @@ api.post('/admin/imagen/borrar', auth, wrap(async (q, s) => {
   await pool.query('DELETE FROM imagenes WHERE negocio_id=$1 AND tipo=$2 AND ref=$3', [q.neg.id, String(q.body.tipo), q.body.tipo === 'portada' ? '1' : String(q.body.ref || '')]);
   s.json({ ok: true });
 }));
-api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, ...horarioAgenda(n), cierra: n.cierra || '', tema: n.tema || '' }); }));
+api.get('/info', wrap(async (q, s) => { const n = q.neg, im = (await pool.query("SELECT id,tipo,ref FROM imagenes WHERE negocio_id=$1 AND tipo IN ('portada','barbero')", [n.id])).rows; s.json({ portada: (im.find(x => x.tipo === 'portada') || {}).id || null, fotos_barberos: Object.fromEntries(im.filter(x => x.tipo === 'barbero').map(x => [x.ref, x.id])), nombre: n.nombre, direccion: n.direccion, whatsapp: n.whatsapp, maps: n.maps, barberos: bars(n), fotos: n.fotos, ...(l => ({ logo: l ? l.img : null, logo_icono: l ? l.icono : null, logo_apple: l ? l.apple : null }))(temaEI.logoDe(n)), abierto: vigente(n), hora_ini: n.hora_ini, hora_fin: n.hora_fin, ...horarioAgenda(n), cierra: n.cierra || '', tema: n.tema || '' }); }));
 api.get('/pagina', wrap(async (q, s) => {
   const n = q.neg, id = n.id, Q = (sql, p = [id]) => pool.query(sql, p).then(r => r.rows);
   const [pf, ev, pr, pd] = await Promise.all([
@@ -881,10 +881,13 @@ app.get('/:slug/panel.json', existe, wrap(async (q, s) => {
 }));
 app.get('/:slug/cartel', existe, page('cartel.html'));
 app.get('/:slug/manifest.json', existe, wrap(async (q, s) => {
-  const n = (await pool.query('SELECT nombre FROM negocios WHERE slug=$1', [q.params.slug])).rows[0].nombre;
+  const neg = (await pool.query('SELECT nombre, fotos FROM negocios WHERE slug=$1', [q.params.slug])).rows[0], n = neg.nombre, logo = temaEI.logoDe(neg);
   s.type('application/manifest+json').json({ id: `/${q.params.slug}`, name: n, short_name: n.slice(0, 12), description: 'Agenda tu cita en ' + n, start_url: `/${q.params.slug}/agenda?app=1`, scope: '/', display: 'standalone', orientation: 'portrait',
-    background_color: '#07090f', theme_color: '#07090f', lang: 'es', categories: ['lifestyle', 'business'],
-    icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
+    // Con logo, la pantalla de arranque usa el mismo crema que sus íconos y que sus páginas.
+    background_color: logo ? '#f1efe9' : '#07090f', theme_color: logo ? '#f1efe9' : '#07090f', lang: 'es', categories: ['lifestyle', 'business'],
+    // Con logo propio, la app instalada usa su medallón (sobre fondo crema, con margen para el recorte de Android).
+    icons: logo ? [{ src: logo.icono, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: logo.grande, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: logo.grande, sizes: '512x512', type: 'image/png', purpose: 'maskable' }]
+      : [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
     shortcuts: [{ name: 'Agendar cita', url: `/${q.params.slug}/agenda?app=1` }] });
 }));
 // Cuerpos de más de 1 MB (p. ej. una foto muy pesada): respuesta clara en JSON en vez de la página de error de express.

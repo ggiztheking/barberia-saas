@@ -194,11 +194,12 @@ test('Estilo Internacional: estado en la portada, extras con miniatura ilustrati
   assert.equal(tema.length, (h.match(/src="\/img\/tema\//g) || []).length, 'cada imagen ilustrativa está dentro de un bloque con su marca');
   for (const b of tema) assert.match(b, /[Ii]lustrativa/, 'imagen ilustrativa sin marca: ' + b.slice(0, 120));
   for (const b of tema) assert.ok(!b.includes('FOTO REAL'), 'una ilustrativa no dice FOTO REAL');
-  // Toda <img> lleva width/height, y todas menos la portada cargan en diferido.
+  // Toda <img> lleva width/height, y todas menos la portada y el logo del encabezado (a la vista al abrir) cargan en diferido.
+  const logoArriba = (h.match(/<header class="header">[\s\S]*?<\/header>/)[0].match(/<img [^>]+>/) || [])[0];
   for (const t of h.match(/<img [^>]+>/g)) {
     if (t.includes('id="lb-img"')) continue;
     assert.match(t, /width="\d+" height="\d+"/, 'sin dimensiones: ' + t);
-    if (!t.includes('hero-photo')) assert.ok(t.includes('loading="lazy"'), 'sin lazy: ' + t);
+    if (!t.includes('hero-photo') && t !== logoArriba) assert.ok(t.includes('loading="lazy"'), 'sin lazy: ' + t);
   }
 });
 
@@ -318,7 +319,7 @@ test('horario de citas en línea junto al horario del local (mismo formato que l
   assert.ok(!sinTexto.includes('Citas en línea'));
   // Si la barbería no recibe citas en línea, no se anuncian.
   assert.deepEqual(citas(pagina({ horario_texto: '9:30 AM a 11:00 PM' }, { abierto: false })), []);
-  assert.ok(conTexto.includes('/tema-ei.css?v=5'), 'la hoja de estilos nueva no sale de la caché');
+  assert.ok(conTexto.includes('/tema-ei.css?v=6'), 'la hoja de estilos nueva no sale de la caché');
 });
 
 test('la línea de citas en línea coincide con los espacios que da la agenda del servidor', { skip: sinBase }, async () => {
@@ -520,4 +521,60 @@ test('portada en video: el servidor entrega el video por partes (Range), como lo
   for (const u of ['/img/portada-ei-movil.mp4', '/img/portada-ei.jpg', '/img/portada-ei-movil.jpg']) assert.equal((await fetch(base + u)).status, 200, u);
   const h = await (await fetch(base + '/estilo-internacional')).text();
   assert.ok(h.includes('<video class="hero-video"'), 'Estilo Internacional ya muestra el video');
+});
+
+// ---- Logo de Estilo Internacional ----
+test('logo: Estilo Internacional lleva su medallón en el encabezado, el pie, la pestaña y los datos para Google', () => {
+  const h = pagina({ fotos: true });
+  const header = h.match(/<header class="header">[\s\S]*?<\/header>/)[0], footer = h.match(/<footer>[\s\S]*?<\/footer>/)[0];
+  assert.match(header, /<a class="brand" href="\/prueba" aria-label="Barbería Prueba inicio"><img class="brand-logo" src="\/img\/logo-ei\.webp\?v=\d+" alt="" width="60" height="60" decoding="async"><span>Barbería Prueba<small>/);
+  assert.ok(!header.includes('monogram') && !footer.includes('monogram'), 'el logo reemplaza a las iniciales');
+  assert.match(footer, /<a class="brand" href="\/prueba"><img class="brand-logo" src="\/img\/logo-ei\.webp\?v=\d+" alt="" width="60" height="60" decoding="async" loading="lazy"><span>Barbería Prueba<\/span><\/a>/, 'en el pie, con el nombre como texto');
+  assert.match(h, /<link rel="apple-touch-icon" href="\/img\/logo-ei-180\.png\?v=\d+"><link rel="icon" href="\/img\/logo-ei-192\.png\?v=\d+" sizes="192x192" type="image\/png">/);
+  assert.match(ld(h)[0].logo, /^http:\/\/x\/img\/logo-ei-512\.png\?v=\d+$/, 'logo en los datos estructurados');
+  // Los archivos del logo llevan la misma versión (caché de 7 días en /img).
+  assert.equal(new Set(h.match(/logo-ei(?:-\d+)?\.(?:webp|png)\?v=\d+/g).map(u => u.split('?')[1])).size, 1);
+  const sin = pagina();
+  assert.ok(sin.includes('<span class="monogram">BP</span>') && !sin.includes('logo-ei') && sin.includes('<link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">'), 'sin logo propio, todo igual que antes');
+  assert.ok(!('logo' in ld(sin)[0]));
+});
+
+test('logo: los archivos existen, son livianos y los íconos son cuadrados del tamaño que anuncian', () => {
+  const img = path.join(__dirname, '..', 'public', 'img');
+  const w = fs.readFileSync(path.join(img, 'logo-ei.webp'));
+  assert.equal(w.toString('latin1', 0, 4) + w.toString('latin1', 8, 12), 'RIFFWEBP');
+  assert.ok(w.length < 60 * 1024, 'logo-ei.webp pesa ' + w.length);
+  for (const [f, lado] of [['logo-ei-180.png', 180], ['logo-ei-192.png', 192], ['logo-ei-512.png', 512]]) {
+    const b = fs.readFileSync(path.join(img, f));
+    assert.equal(b.toString('latin1', 1, 4), 'PNG', f);
+    assert.deepEqual([b.readUInt32BE(16), b.readUInt32BE(20)], [lado, lado], f);
+    assert.ok(b.length < 300 * 1024, f);
+  }
+  // La agenda muestra el logo que le manda /info, escapado.
+  const agenda = fs.readFileSync(path.join(__dirname, '..', 'public', 'app-agenda.html'), 'utf8');
+  assert.ok(agenda.includes("if(I.logo){") && agenda.includes("esc(I.logo)") && agenda.includes('l.lastChild.textContent=I.nombre'));
+  assert.ok(agenda.includes("$('link[rel=icon]').href=I.logo_icono") && agenda.includes("$('link[rel=apple-touch-icon]').href=I.logo_apple"), 'la agenda también cambia su ícono');
+});
+
+test('logo: la agenda y la app instalada usan el logo de Estilo Internacional; otras barberías siguen igual', { skip: sinBase }, async () => {
+  const info = await (await fetch(base + '/api/estilo-internacional/info')).json();
+  assert.match(info.logo, /^\/img\/logo-ei\.webp\?v=\d+$/);
+  assert.equal((await fetch(base + info.logo)).status, 200);
+  const man = await (await fetch(base + '/estilo-internacional/manifest.json')).json();
+  assert.deepEqual(man.icons.map(i => `${i.src.split('?')[0]} ${i.sizes} ${i.purpose}`), ['/img/logo-ei-192.png 192x192 any', '/img/logo-ei-512.png 512x512 any', '/img/logo-ei-512.png 512x512 maskable']);
+  for (const i of man.icons) assert.equal((await fetch(base + i.src)).status, 200, i.src);
+  assert.match(info.logo_icono, /^\/img\/logo-ei-192\.png\?v=\d+$/); assert.match(info.logo_apple, /^\/img\/logo-ei-180\.png\?v=\d+$/);
+  for (const u of [info.logo_icono, info.logo_apple]) assert.equal((await fetch(base + u)).status, 200, u);
+  assert.deepEqual([man.background_color, man.theme_color], ['#f1efe9', '#f1efe9'], 'arranque de la app en el mismo crema que el ícono');
+  // Otra barbería con la plantilla clara pero sin logo propio: todo como antes.
+  const slug = 'logo-' + sufijo;
+  await registra(base, slug);
+  await pool.query("UPDATE negocios SET tema='ei' WHERE slug=$1", [slug]);
+  const otra = await (await fetch(base + `/api/${slug}/info`)).json();
+  assert.deepEqual([otra.logo, otra.logo_icono, otra.logo_apple], [null, null, null]);
+  const om = await (await fetch(base + `/${slug}/manifest.json`)).json();
+  assert.equal(om.icons[0].src, '/icon-192.png'); assert.equal(om.background_color, '#07090f');
+  const h = await (await fetch(base + '/' + slug)).text();
+  assert.ok(h.includes('<span class="monogram">'), 'sigue con sus iniciales');
+  assert.ok(!h.includes('logo-ei') && h.includes('<link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">'), 'otra barbería no usa el logo de Estilo Internacional');
 });
