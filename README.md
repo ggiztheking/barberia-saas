@@ -28,7 +28,7 @@ Ver [`.env.example`](.env.example) para la lista completa con descripciones.
 | Variable | Obligatoria | Uso |
 |---|---|---|
 | `DATABASE_URL` | Sí | Conexión a PostgreSQL |
-| `PORT` | No | Puerto (Railway lo define; por defecto 3000) |
+| `PORT` | No | Puerto (por defecto 3000) |
 | `ADMIN_PASS` | No | Contraseña inicial del admin de `estilo-internacional` (si falta, se genera una aleatoria) |
 | `BARBEROS` | No | Barberos iniciales de `estilo-internacional`, separados por coma |
 | `CORREO_PRINCIPAL` | No | Correo de avisos de `estilo-internacional` (`CORREO_ONYX` sigue valiendo) |
@@ -235,9 +235,9 @@ Pestaña **Clientes** del panel, sección "Tarjeta de sellos". Ayuda a que los c
 
 ## Dónde alojarlo
 
-- **Ahora:** Railway, tal como está (se despliega solo con cada push a `main`). No hace falta nada más mientras no haya dominio propio.
+- **Ahora:** un servidor de Akamai Cloud con todo (agenda, PostgreSQL, agente de WhatsApp y HTTPS automático), que se actualiza solo con cada push a `main`. Ver `infra/akamai` en el repo AgenteWhatsapp.
 - **Con dominio propio:** Cloudflare delante (DNS, CDN, HTTPS), fotos en R2 en lugar de la tabla `imagenes` (hoy guarda los archivos dentro de PostgreSQL) y un dominio por barbería con Cloudflare for SaaS (incluye 100).
-- **Pasar a un VPS:** solo si la factura de Railway supera de forma sostenida unos USD 40–50/mes, o hay decenas de barberías pagando, o la base o las fotos crecen mucho. Confirma los precios en las páginas oficiales antes de comprar; cambian seguido.
+- **Crecer:** si hay decenas de barberías pagando o la base y las fotos crecen mucho, un servidor más grande en Akamai, o la base en un servicio administrado. Confirma los precios en las páginas oficiales antes de comprar; cambian seguido.
 
 ## App instalable (PWA)
 
@@ -247,9 +247,9 @@ Cada barbería se puede instalar como app desde su página (`/<slug>`): botón "
 
 La landing sale con título, descripción, vista previa para WhatsApp/redes y URL canónica generados por el servidor. Hay `GET /sitemap.xml` (negocios vigentes) y `public/robots.txt`.
 
-## Despliegue (Railway)
+## Despliegue (Akamai)
 
-El servicio `app` está conectado a este repo (rama `main`). Cada `git push` a `main` dispara un build y despliegue automáticos. Las variables se configuran en el dashboard de Railway; `DATABASE_URL` viene del servicio Postgres del mismo proyecto.
+El servidor de Akamai sigue este repo (rama `main`): cada 2 minutos revisa GitHub y, si hay cambios, recompila la agenda y la reinicia. Producción en `https://agendabarberias.xyz` (en cuanto el dominio apunte a `172.235.141.127`; mientras, `https://agenda.172-235-141-127.sslip.io`). `DATABASE_URL`, `PORT` y `PUBLIC_URL` los pone el servidor; las demás variables viven en `/opt/estilo/barberia.env` (comandos `claves` y `migrar-railway`). Los detalles están en `infra/akamai` del repo AgenteWhatsapp. Railway ya no se usa.
 
 - Health check: `GET /health` → `ok`
 - Arranque: `npm start` · desarrollo: `npm run dev` · verificación de sintaxis: `npm run check`

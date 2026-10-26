@@ -1,6 +1,6 @@
 ---
 name: mejorar-agenda
-description: Programa una mejora, un arreglo o una función nueva en el SaaS de agendas (página de la barbería, agenda de clientes, panel del dueño y los barberos, cobros, CRM, finanzas, marketing), la prueba completa con un recorrido en el navegador y, con el visto bueno de la persona, la publica en Railway y en el servidor de Akamai. Úsala cuando pidan cambiar, agregar o arreglar algo de la agenda, el panel o la página de Estilo Internacional u otra barbería.
+description: Programa una mejora, un arreglo o una función nueva en el SaaS de agendas (página de la barbería, agenda de clientes, panel del dueño y los barberos, cobros, CRM, finanzas, marketing), la prueba completa con un recorrido en el navegador y, con el visto bueno de la persona, la publica en el servidor de Akamai. Úsala cuando pidan cambiar, agregar o arreglar algo de la agenda, el panel o la página de Estilo Internacional u otra barbería.
 ---
 
 # /mejorar-agenda: de una idea a la agenda en producción
@@ -30,9 +30,9 @@ de lo que verán el dueño, los barberos o los clientes (pantallas, botones, avi
   | CRM | `crm.js`, `public/app-crm.html`, `public/crm-app.js` |
   | Página del SaaS, registro, términos | `public/saas.html`, `public/registro.html`, `sitio.js` |
 
-- **Publicar = que el commit llegue a `main`.** De ahí sale solo a dos lugares: Railway (la agenda que usan hoy los
-  clientes, con **datos reales**) y el servidor de Akamai (revisa GitHub cada 2 minutos, recompila y reinicia; su
-  base empezó de cero). `CLAUDE.md` pide aprobación antes de cada push a `main`: respétalo siempre.
+- **Publicar = que el commit llegue a `main`.** El servidor de Akamai (la agenda que usan los clientes, con **datos
+  reales**) revisa GitHub cada 2 minutos, recompila y reinicia solo. `CLAUDE.md` pide aprobación antes de cada push
+  a `main`: respétalo siempre.
 - La base de producción es real: los cambios de tablas solo agregan (`ADD COLUMN IF NOT EXISTS`, tablas nuevas tras
   `listo`). Nunca borres ni renombres columnas, ni cambies datos existentes sin que la persona lo pida y lo apruebe.
 
@@ -80,14 +80,14 @@ de lo que verán el dueño, los barberos o los clientes (pantallas, botones, avi
    `main` avanzó, repite este paso.
 10. **Confirmar en línea.** `/health` solo dice que el servidor vive; comprueba algo propio del cambio (la ruta
     nueva responde, el HTML trae el `?v=N` nuevo o el texto nuevo):
-    - Akamai: `https://agenda.172-235-141-127.sslip.io/estilo-internacional` (revisa cada 20 s, hasta 10 minutos).
-    - Railway: la dirección pública de la agenda (su `PUBLIC_URL`). Si no la conoces, pídela una vez y anótala
-      aquí. Railway publica solo en 2 o 3 minutos.
+    - `https://agendabarberias.xyz/estilo-internacional` si el dominio ya apunta al servidor; si no,
+      `https://agenda.172-235-141-127.sslip.io/estilo-internacional` (revisa cada 20 s, hasta 10 minutos).
     Si no aparece, revisa que el commit esté en `main` y que las pruebas pasen; desde aquí no hay acceso a los
-    registros de Railway ni del servidor.
+    registros del servidor.
 11. **Entregar** en pocas líneas: qué cambió y dónde verlo (enlaces), qué supusiste, qué pruebas agregaste, y una
-    o dos ideas de lo siguiente que podría pedir. Si hace falta configurar algo (una variable en Railway, una
-    clave), di cuál y dónde; cambiar variables en Railway también requiere su aprobación.
+    o dos ideas de lo siguiente que podría pedir. Si hace falta configurar algo (una variable o una clave), di
+    cuál y cómo: en el servidor van en `/opt/estilo/barberia.env` (el comando `claves` pide las de uso común) y
+    cambiarlas también requiere su aprobación.
 
 ## Si algo sale mal en producción
 

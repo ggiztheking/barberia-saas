@@ -43,7 +43,7 @@ bash herramientas/probar.sh  # antes de publicar: reglas del repo, check, todas 
 
 ## Despliegue y precauciones
 
-- Railway con despliegue automático: **cada push a `main` publica en producción**. Pide aprobación antes de hacer push o de cambiar variables en Railway. El servidor de Akamai (`https://agenda.172-235-141-127.sslip.io`, con su propia base) también sigue `main`: revisa GitHub cada 2 minutos y se actualiza solo.
+- Producción: el servidor de Akamai (`https://agendabarberias.xyz` en cuanto el dominio apunte a `172.235.141.127`; mientras, `https://agenda.172-235-141-127.sslip.io`). Sigue `main`: revisa GitHub cada 2 minutos y se actualiza solo, así que **cada push a `main` publica en producción**. Pide aprobación antes de hacer push o de cambiar sus variables (`/opt/estilo/barberia.env`, con los comandos `claves` y `migrar-railway` del servidor; ver `infra/akamai` en el repo AgenteWhatsapp). Railway ya no se usa: si su proyecto sigue existiendo, también publica desde `main` hasta que se borre.
 - El CI de GitHub (`.github/workflows/ci.yml`: Postgres 16, `npm run check` + `npm test`) no corre mientras la cuenta tenga bloqueo de facturación.
 - Escribe archivos en UTF-8 (en Windows, `Get-Content`/`Set-Content` sin `-Encoding utf8` corrompen los acentos).
 - Los servicios, paquetes y citas de `estilo-internacional` en producción son datos reales del cliente.
