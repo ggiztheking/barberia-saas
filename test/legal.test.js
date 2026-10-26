@@ -197,3 +197,30 @@ test('sin sesión da 401, cada barbería ve solo lo suyo y los barberos no entra
   const cb = ent.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
   assert.equal((await llama(slugA, cb, 'pasos')).status, 403, 'un barbero no ve la pestaña legal');
 });
+
+test('el aviso dice cómo se agenda para un menor y, solo si el dueño lo activa, que un asistente con IA contesta el WhatsApp', { skip: sinBase }, async () => {
+  const publico = async () => (await fetch(`${srv.base}/${slugB}/privacidad`)).text();
+  let h = await publico();
+  assert.match(h, /menor de 18 años, la agenda su madre, padre o tutor/);
+  assert.match(h, /das ese consentimiento como su madre, padre o tutor/);
+  assert.ok(!h.includes('inteligencia artificial'), 'sin asistente no se menciona la IA');
+
+  const r = await llama(slugB, cookieB, 'datos', { asistente: 'Oxion AI <b>' });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).asistente, 'Oxion AI <b>');
+  const d = await pasos(slugB, cookieB);
+  assert.equal(d.asistente, 'Oxion AI <b>');
+  assert.equal(d.correo, '', 'guardar el asistente no toca el correo');
+  h = await publico();
+  assert.match(h, /Si nos escribes por WhatsApp:/);
+  assert.match(h, /asistente automático con inteligencia artificial/);
+  assert.ok(h.includes('(<b>Oxion AI &lt;b&gt;</b>)'), 'proveedor escapado en el aviso integral');
+  assert.ok(h.includes('se procesan con su proveedor (Oxion AI &lt;b&gt;) solo para responderte'), 'y en el simplificado');
+  assert.match(h, /pídelo en el mismo chat/);
+  const doc = await (await llama(slugB, cookieB, 'doc/aviso-integral')).text();
+  assert.match(doc, /asistente automático con inteligencia artificial/);
+
+  assert.equal((await llama(slugB, cookieB, 'datos', { asistente: '' })).status, 200);
+  assert.ok(!(await publico()).includes('inteligencia artificial'), 'al quitarlo, el aviso deja de mencionarlo');
+  assert.equal((await llama(slugA, cookieB, 'datos', { asistente: 'X' })).status, 401, 'no se puede cambiar el aviso de otra barbería');
+});

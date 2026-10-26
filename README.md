@@ -101,6 +101,8 @@ Orientación general para abrir y operar una barbería en Mérida, Yucatán. **N
   - contrato con barbero comisionista, con advertencia sobre la subordinación laboral;
   - reglamento interno de higiene y atención.
 - **Aviso de privacidad público** en `/<tu-enlace>/privacidad`, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (DOF 20/03/2025). La autoridad es la Secretaría Anticorrupción y Buen Gobierno.
+  - Dice cómo se agenda para un menor de edad: lo hace su madre, padre o tutor, con sus propios datos, y da el consentimiento por él.
+  - Si en **Legal** marcas "Mi WhatsApp lo contesta un asistente con inteligencia artificial" y escribes su proveedor (`legal_datos.asistente`), el aviso integral y el simplificado dicen que los mensajes, fotos y audios se procesan con ese proveedor y que el cliente puede pedir una persona. Sin marcarlo, no se menciona.
 - Para que los documentos salgan completos:
   - En **Ajustes**, llena la dirección y el WhatsApp del negocio.
   - En **Legal**, llena el nombre o razón social del titular y, si quieres, un correo para temas de privacidad.
@@ -109,7 +111,7 @@ Orientación general para abrir y operar una barbería en Mérida, Yucatán. **N
 - Rutas:
   - `GET /api/:slug/admin/legal/pasos`
   - `POST /api/:slug/admin/legal/paso {paso, hecho?, nota?}`: lo que no mandes se conserva.
-  - `POST /api/:slug/admin/legal/datos {titular?, correo?}`
+  - `POST /api/:slug/admin/legal/datos {titular?, correo?, asistente?}`
   - `GET /api/:slug/admin/legal/doc/:tipo`
   - `GET /:slug/privacidad`
 - Pruebas: `node --test test/legal.test.js`.
@@ -267,6 +269,8 @@ El servicio `app` está conectado a este repo (rama `main`). Cada `git push` a `
 **API pública** (`/api/:slug/...`)
 
 `GET info · estilos · productos · horarios` · `POST citas · mis-citas · cancelar`
+
+**Cuentas de clientes** (`/api/:slug/cliente/...`, cookie del cliente): `POST registro · entrar · salir · datos · borrar` · `GET yo`. Con `borrar` (pide su contraseña) el cliente borra su cuenta desde "Mi cuenta": se cierran todas sus sesiones y sus citas se quedan en la agenda del negocio, sin cuenta ligada. Pruebas: `test/cuentas.test.js`.
 
 **API de administración** (`/api/:slug/admin/...`, cabecera `x-admin: <contraseña>`)
 

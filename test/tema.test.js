@@ -319,7 +319,7 @@ test('horario de citas en línea junto al horario del local (mismo formato que l
   assert.ok(!sinTexto.includes('Citas en línea'));
   // Si la barbería no recibe citas en línea, no se anuncian.
   assert.deepEqual(citas(pagina({ horario_texto: '9:30 AM a 11:00 PM' }, { abierto: false })), []);
-  assert.ok(conTexto.includes('/tema-ei.css?v=6'), 'la hoja de estilos nueva no sale de la caché');
+  assert.ok(conTexto.includes('/tema-ei.css?v=7'), 'la hoja de estilos nueva no sale de la caché');
 });
 
 test('la línea de citas en línea coincide con los espacios que da la agenda del servidor', { skip: sinBase }, async () => {

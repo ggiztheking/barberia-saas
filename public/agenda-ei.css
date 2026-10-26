@@ -1,7 +1,7 @@
 /* La agenda con el tema "Estilo Internacional" (claro): mismos colores y tipografías que la página pública. */
 /* --precio: el naranja de la marca oscurecido para textos sobre crema (5.2:1 sobre --bg y 4.65:1 sobre --panel; #cc7232 daba 2.71:1).
    --gold se queda igual: lo usan los botones, bordes y chips elegidos. */
-:root { --bg: #f1efe9; --panel: #e4e3dc; --ink: #181a19; --dim: #676a64; --gold: #cc7232; --precio: #9a4f1c; --error: #a3341f; --line: #d5d4cb; color-scheme: light; }
+:root { --bg: #f1efe9; --panel: #e4e3dc; --ink: #181a19; --dim: #5e615b; --gold: #cc7232; --precio: #9a4f1c; --error: #a3341f; --line: #d5d4cb; color-scheme: light; }
 body { font-family: 'DM Sans', system-ui, sans-serif; font-weight: 400; }
 h1, h2, h3, .logo, .barra .res b, .barra .tot b { font-family: Manrope, system-ui, sans-serif; font-weight: 700; letter-spacing: -.04em; }
 .logo { letter-spacing: .12em; font-size: 20px; text-transform: uppercase; }
@@ -18,6 +18,10 @@ button, .btn, .tag { font-family: 'DM Sans', system-ui, sans-serif; font-weight:
 .atajo:hover { border-color: var(--ink); }
 /* Precios y textos naranjas sobre crema: con el tono oscurecido para que se lean (AA) */
 .opt em, .card b, .fecha b, .atajo span, .tag.pendiente { color: var(--precio); }
+/* Textos con color:var(--gold) en línea (enlaces, "Editar mis datos") y botones de contorno: mismo tono oscurecido;
+   al pasar el mouse, el botón se rellena con --gold y su texto oscuro de s.css sigue igual */
+[style^="color:var(--gold)"], [style*=";color:var(--gold)"] { color: var(--precio) !important; }
+.alt:not(:hover) { color: var(--precio); }
 /* Avisos y estados: los colores de s.css están pensados para el fondo oscuro (#e3a0a0 sobre crema daba 1.86:1) */
 .aviso-campo { color: var(--error); }
 .tag.cancelada, .tag.no_llego { color: var(--error); border-color: #d9a79c; }

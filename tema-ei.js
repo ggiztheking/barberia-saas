@@ -232,7 +232,7 @@ ${referencias.length >= 2 && referencias.length <= 8 ? `<div class="filters" ari
 <meta name="twitter:title" content="${esc(titulo)}"><meta name="twitter:description" content="${esc(descr)}">
 <link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="${logo ? logo.apple : '/icon-192.png'}"><link rel="icon" href="${logo ? logo.icono : '/icon-192.png'}"${logo ? ' sizes="192x192" type="image/png"' : ''}>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=6">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&display=swap"><link rel="stylesheet" href="/tema-ei.css?v=7">
 ${video ? `<link rel="preload" as="image" href="${hero}" fetchpriority="high" media="${ANCHA}"><link rel="preload" as="image" href="/img/portada-ei-movil.jpg${PV}" fetchpriority="high" media="${VERTICAL}">`
     : hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
 ${ld.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('\n')}</head><body>

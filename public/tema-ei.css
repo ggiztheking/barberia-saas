@@ -1,5 +1,5 @@
 /* Tema "Estilo Internacional" (ei). Diseño del sitio original, sin la sección de fidelidad retirada. */
-:root { --ink: #181a19; --paper: #f1efe9; --tone: #e7e4da; --accent: #e9ac76; --accent-text: #8f4a1b; --muted: #5e615b; --line: #d5d4cb; --ok: #2f7d4f; }
+:root { --ink: #181a19; --paper: #f1efe9; --tone: #e7e4da; --accent: #e9ac76; --accent-text: #8f4a1b; --muted: #5e615b; --line: #d5d4cb; --ok: #2a7047; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 92px; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 16px 'DM Sans', Arial, sans-serif; }

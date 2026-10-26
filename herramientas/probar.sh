@@ -26,10 +26,12 @@ done
 # Cada .js/.css del front que cambió respecto a main y se carga con ?v=N debe subir ese número (caché y sw.js).
 if git rev-parse -q --verify origin/main >/dev/null; then
   SIN_V=""
+  # Se lee una sola vez: con pipefail, `git diff | grep -q` falla si grep corta antes de que git termine de escribir.
+  DIFF=$(git diff origin/main -- public ./*.js)
   for f in $(git diff --name-only origin/main -- 'public/*.js' 'public/*.css'; git ls-files --others --exclude-standard -- 'public/*.js' 'public/*.css'); do
     n=$(basename "$f")
     grep -rqF "$n?v=" public/*.html ./*.js || continue
-    git diff origin/main -- public ./*.js | grep -q "^+.*$n?v=" || SIN_V="$SIN_V $n"
+    grep -qF "$n?v=" <<<"$(grep '^+' <<<"$DIFF")" || SIN_V="$SIN_V $n"
   done
   [ -z "$SIN_V" ] || { echo "✗ Cambiaste estos archivos pero no subiste su ?v=N donde se cargan:$SIN_V"; exit 1; }
 fi

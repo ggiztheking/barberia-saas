@@ -549,6 +549,25 @@ api.post('/cliente/datos', wrap(async (q, s) => {
   }
   s.json({ ok: true });
 }));
+// El cliente borra su cuenta (derecho de cancelación). Pide su contraseña para que un celular prestado no baste.
+// Sus citas se quedan en la agenda del negocio (con su nombre y WhatsApp), solo dejan de estar ligadas a la cuenta.
+api.post('/cliente/borrar', wrap(async (q, s) => {
+  const c = await cuentaCli(q);
+  if (!c) return s.status(401).json({ error: 'Inicia sesión para continuar' });
+  if (limita('cb' + q.ip, 10, 6e5)) return s.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
+  const k = (await pool.query('SELECT salt,hash FROM cuentas WHERE id=$1', [c.id])).rows[0];
+  if (!okHash(String(q.body.password || ''), k.salt, k.hash)) return s.status(400).json({ error: 'Tu contraseña no es correcta' });
+  await cierraSesion(q, s, 'cliente');
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    await cl.query('UPDATE citas SET cuenta_id=NULL WHERE negocio_id=$1 AND cuenta_id=$2', [q.neg.id, c.id]);
+    await cl.query("DELETE FROM sesiones WHERE tipo='cliente' AND ref_id=$1 AND negocio_id=$2", [c.id, q.neg.id]);
+    await cl.query('DELETE FROM cuentas WHERE id=$1 AND negocio_id=$2', [c.id, q.neg.id]);
+    await cl.query('COMMIT');
+  } catch (e) { await cl.query('ROLLBACK').catch(() => {}); throw e; } finally { cl.release(); }
+  s.json({ ok: true });
+}));
 api.post('/admin/cuentas/reset', auth, wrap(async (q, s) => {
   const c = (await pool.query('SELECT id,nombre FROM cuentas WHERE negocio_id=$1 AND telefono=$2', [q.neg.id, tel10(q.body.telefono)])).rows[0];
   if (!c) return s.status(404).json({ error: 'No hay una cuenta de cliente con ese WhatsApp' });

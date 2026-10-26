@@ -5,7 +5,8 @@
 .lg-paso{padding:14px 0;border-top:1px solid var(--line)}.lg-paso label{display:flex;gap:12px;align-items:flex-start;cursor:pointer;font-size:16px;text-transform:none;letter-spacing:0;color:var(--ink)}
 .lg-paso input[type=checkbox]{width:22px;height:22px;flex:0 0 22px;margin:2px 0 0;accent-color:var(--gold)}.lg-paso.ok .lg-t{color:var(--dim);text-decoration:line-through}
 .lg-paso details{margin:8px 0 0 34px;font-size:14.5px}.lg-paso summary{cursor:pointer;color:var(--gold);font-size:13px}.lg-paso dl{margin:8px 0 0}.lg-paso dt{color:var(--dim);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:8px}.lg-paso dd{margin:2px 0 0}
-.lg-paso .lg-nota{margin:8px 0 0 34px;width:calc(100% - 34px);font-size:14px;padding:8px 0}.lg-docs{display:grid;gap:10px}.lg-docs a{text-align:center}.lg-gr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:30px}.lg-gr small{color:var(--dim)}`;
+.lg-paso .lg-nota{margin:8px 0 0 34px;width:calc(100% - 34px);font-size:14px;padding:8px 0}.lg-docs{display:grid;gap:10px}.lg-docs a{text-align:center}.lg-gr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:30px}.lg-gr small{color:var(--dim)}
+.lg-ia{display:flex;gap:10px;align-items:flex-start;font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink);margin:6px 0 14px;cursor:pointer}.lg-ia input{width:20px;height:20px;flex:0 0 20px;margin:1px 0 0;accent-color:var(--gold)}`;
   const FALTA = { direccion: 'la dirección de tu barbería (Ajustes)', contacto: 'un medio de contacto: el WhatsApp del negocio (Ajustes) o un correo de privacidad (aquí abajo)', titular: 'el nombre completo o razón social del titular (aquí abajo)' };
   const url = u => /^https:\/\//.test(u || '') ? u : null; // solo enlaces https a fuentes oficiales
   let D = null;
@@ -32,7 +33,10 @@ ${D.faltan.length ? `<div class="msg" style="margin:0 0 20px">Para que tus docum
 <div class="panel"><label for="lg-tit">Nombre completo o razón social del titular</label><input id="lg-tit" maxlength="120" value="${esc(D.titular)}" placeholder="Como aparece en tu constancia del SAT">
 <p style="font-size:13.5px;margin:-8px 0 10px">Aparece como responsable en el aviso de privacidad y en el contrato.</p>
 <label for="lg-cor">Correo para temas de privacidad (opcional)</label><input id="lg-cor" type="email" maxlength="120" value="${esc(D.correo || '')}" placeholder="privacidad@tubarberia.com">
-<p style="font-size:13.5px;margin:-8px 0 10px">Se publica en tu aviso de privacidad para que tus clientes ejerzan sus derechos. Si lo dejas vacío, se usa el WhatsApp del negocio.</p><button id="lg-tit-ok">Guardar</button></div>
+<p style="font-size:13.5px;margin:-8px 0 10px">Se publica en tu aviso de privacidad para que tus clientes ejerzan sus derechos. Si lo dejas vacío, se usa el WhatsApp del negocio.</p>
+<label class="lg-ia"><input type="checkbox" id="lg-ia" ${D.asistente ? 'checked' : ''}> Mi WhatsApp lo contesta un asistente con inteligencia artificial</label>
+<div id="lg-ia-p" ${D.asistente ? '' : 'hidden'}><label for="lg-prov">Proveedor del asistente</label><input id="lg-prov" maxlength="80" value="${esc(D.asistente || '')}" placeholder="Por ejemplo: Anthropic (Claude) u Oxion AI">
+<p style="font-size:13.5px;margin:-8px 0 10px">Tu aviso de privacidad dirá que un asistente con IA contesta tu WhatsApp y que tus clientes pueden pedir que los atienda una persona.</p></div><button id="lg-tit-ok">Guardar</button></div>
 <h2 style="margin-top:30px">Documentos</h2><p>Se llenan con los datos de tu barbería y se abren en otra pestaña para imprimir o guardar como PDF. Revísalos antes de usarlos.</p>
 <div class="panel"><div class="lg-docs">${D.docs.map(x => x.tipo === 'contrato' ? '' : `<a class="btn alt" target="_blank" rel="noopener" href="${esc(doc(x.tipo))}">${esc(x.titulo)}</a>`).join('')}</div>
 <label for="lg-bar" style="margin-top:18px;display:block">Contrato con barbero comisionista</label><select id="lg-bar"><option value="">Sin nombre (lo llenas a mano)</option>${D.barberos.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}</select>
@@ -66,6 +70,7 @@ ${D.grupos.map(g => `<div class="lg-gr"><h3>${esc(g.titulo)}</h3><small data-gc=
     dibuja(el);
     el.onchange = e => {
       const t = e.target, caja = t.closest('.lg-paso');
+      if (t.id === 'lg-ia') { el.querySelector('#lg-ia-p').hidden = !t.checked; if (t.checked) el.querySelector('#lg-prov').focus(); return; }
       if (t.id === 'lg-bar') { el.querySelector('#lg-con').href = `/api/${N}/admin/legal/doc/contrato${t.value ? '?barbero=' + encodeURIComponent(t.value) : ''}`; return; }
       if (!caja) return;
       if (t.type === 'checkbox') guarda(el, caja, { hecho: t.checked });
@@ -75,7 +80,9 @@ ${D.grupos.map(g => `<div class="lg-gr"><h3>${esc(g.titulo)}</h3><small data-gc=
       if (e.target.id === 'lg-aj') { if (typeof ve === 'function') ve('ajustes', '#aj'); return; }
       if (e.target.id !== 'lg-tit-ok') return;
       try {
-        await P('/admin/legal/datos', { titular: el.querySelector('#lg-tit').value, correo: el.querySelector('#lg-cor').value });
+        const ia = el.querySelector('#lg-ia').checked, prov = el.querySelector('#lg-prov').value.trim();
+        if (ia && !prov) { toast('Escribe el proveedor del asistente'); el.querySelector('#lg-prov').focus(); return; }
+        await P('/admin/legal/datos', { titular: el.querySelector('#lg-tit').value, correo: el.querySelector('#lg-cor').value, asistente: ia ? prov : '' });
         toast('Datos guardados');
         D = await J('/admin/legal/pasos'); dibuja(el);
       } catch (x) { toast(x.message); }

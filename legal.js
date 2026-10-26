@@ -14,10 +14,12 @@ module.exports = (app, api, d) => {
     // Correo que el dueño decide publicar para temas de privacidad. No se usa el "correo para avisos de citas" de Ajustes,
     // que es privado y terminaría en una página pública indexada por buscadores.
     await pool.query('ALTER TABLE legal_datos ADD COLUMN IF NOT EXISTS correo TEXT');
+    // Proveedor del asistente con IA que contesta el WhatsApp del negocio (vacío = no hay asistente): el aviso debe decirlo.
+    await pool.query('ALTER TABLE legal_datos ADD COLUMN IF NOT EXISTS asistente TEXT');
   }).catch(console.error);
 
   const AVISO = 'Esto es orientación general para ayudarte a ordenarte, no es asesoría legal ni fiscal. Los requisitos y costos cambian: confirma cada paso con la autoridad que lo emite, con tu contador o con un abogado.';
-  const VERSION = '14 de octubre de 2026'; // fecha de la última revisión de los textos de este módulo
+  const VERSION = '26 de octubre de 2026'; // fecha de la última revisión de los textos de este módulo
   const LEY_DATOS = 'https://www.ordenjuridico.gob.mx/Documentos/Federal/html/wo125102.html';
   const LFT = 'https://www.diputados.gob.mx/LeyesBiblio/pdf/LFT.pdf';
   const PORTAL_MERIDA = 'https://portalciudadano.merida.gob.mx/';
@@ -127,9 +129,9 @@ module.exports = (app, api, d) => {
   // ---- Datos del negocio que usan los documentos
   const tel = v => { const x = String(v || '').replace(/\D/g, ''), t = x.length === 12 && x.startsWith('52') ? x.slice(2) : x; return t.length === 10 ? `${t.slice(0, 3)} ${t.slice(3, 6)} ${t.slice(6)}` : t; };
   const datos = async n => {
-    const r = (await Q('SELECT titular,correo FROM legal_datos WHERE negocio_id=$1', [n.id]))[0] || {};
+    const r = (await Q('SELECT titular,correo,asistente FROM legal_datos WHERE negocio_id=$1', [n.id]))[0] || {};
     // El WhatsApp del negocio ya es público (landing y agenda); el correo es el que el dueño captura aquí para privacidad.
-    return { nombre: n.nombre, titular: String(r.titular || '').trim(), direccion: String(n.direccion || '').trim(), correo: String(r.correo || '').trim(), whatsapp: tel(n.whatsapp), slug: n.slug };
+    return { nombre: n.nombre, titular: String(r.titular || '').trim(), direccion: String(n.direccion || '').trim(), correo: String(r.correo || '').trim(), asistente: String(r.asistente || '').trim(), whatsapp: tel(n.whatsapp), slug: n.slug };
   };
   const correoOk = v => /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[^\s@<>"']{2,}$/.test(v);
   const faltan = x => [!x.direccion && 'direccion', !x.correo && !x.whatsapp && 'contacto', !x.titular && 'titular'].filter(Boolean);
@@ -155,9 +157,11 @@ module.exports = (app, api, d) => {
 <li><b>Cuando agendas una cita:</b> tu nombre, tu número de WhatsApp, el servicio y los extras que eliges, el barbero, la fecha y la hora, el precio, el código de la cita y su estado (pendiente, atendida, cancelada o no llegó).</li>
 <li><b>Si creas una cuenta (es opcional):</b> tu nombre, tu WhatsApp y una contraseña. La contraseña se guarda cifrada; nadie del equipo puede verla.</li>
 <li><b>Si te apuntas a un evento:</b> tu nombre y tu WhatsApp.</li>
+${x.asistente ? '<li><b>Si nos escribes por WhatsApp:</b> tus mensajes y lo que nos mandes (fotos o audios), para responderte y administrar tus citas.</li>' : ''}
 <li><b>Lo que el equipo puede anotar para atenderte mejor:</b> notas sobre tu servicio (por ejemplo, el corte que prefieres), etiquetas, el día y mes de tu cumpleaños si nos lo das, tu preferencia para recibir promociones y el registro de los mensajes que te enviamos.</li>
 </ul>
 <p>No te pedimos datos sensibles (como datos de salud, religión u orientación sexual) ni datos financieros o patrimoniales: el pago se hace en la barbería. Pedimos al equipo no anotar datos sensibles en tus notas.</p>
+<p><b>Menores de edad:</b> si la cita es para una persona menor de 18 años, la agenda su madre, padre o tutor con sus propios datos de contacto. No pedimos datos del menor más allá de su nombre.</p>
 <h2>3. Para qué usamos tus datos</h2>
 <p><b>Finalidades necesarias</b> (sin ellas no podemos darte el servicio):</p>
 <ul><li>Agendar, confirmar, reprogramar o cancelar tus citas y avisar al barbero que te atenderá.</li><li>Enviarte recordatorios de tu cita.</li>
@@ -168,6 +172,7 @@ module.exports = (app, api, d) => {
 <h2>4. Con quién compartimos tus datos</h2>
 <p>No vendemos tus datos ni los transferimos a terceros sin tu consentimiento, salvo en los casos que permite el artículo 36 de la ley (por ejemplo, cuando lo exige una ley o es necesario para la procuración o administración de justicia).</p>
 <p>Usamos proveedores de tecnología que tratan tus datos solo por nuestra cuenta y siguiendo nuestras instrucciones: la plataforma de agenda en línea y su alojamiento, el servicio de correo y, en su caso, la herramienta de automatización con los que recibimos los avisos de citas, y WhatsApp cuando lo usamos para enviarte mensajes. Algunos de estos proveedores pueden tener sus servidores fuera de México.</p>
+${x.asistente ? `<p><b>Asistente con inteligencia artificial:</b> nuestro WhatsApp lo atiende un asistente automático con inteligencia artificial. Para contestarte, tus mensajes, fotos y audios se procesan con su proveedor (<b>${esc(x.asistente)}</b>), que puede tener sus servidores fuera de México, solo para responderte y administrar tus citas. Si prefieres que te atienda una persona, pídelo en el mismo chat.</p>` : ''}
 <h2>5. Cookies y almacenamiento en tu dispositivo</h2>
 <p>La agenda usa una cookie técnica para mantener abierta tu sesión si creas una cuenta, y guarda en tu propio navegador los códigos de tus citas para que puedas verlas, cambiarlas o cancelarlas. No usamos cookies de publicidad. Puedes borrarlas desde tu navegador; solo tendrías que volver a iniciar sesión.</p>
 <h2>6. Tus derechos (ARCO) y cómo ejercerlos</h2>
@@ -176,7 +181,7 @@ module.exports = (app, api, d) => {
 <h2>7. Cuánto tiempo guardamos tus datos</h2>
 <p>Mientras tengas citas o cuenta con nosotros y sean necesarios para las finalidades de este aviso, y por el tiempo que exijan las leyes. Después los cancelamos.</p>
 <h2>8. Tu consentimiento</h2>
-<p>Si agendas después de conocer este aviso y no manifiestas lo contrario, consientes el tratamiento de tus datos para las finalidades necesarias (artículo 7 de la ley). Para las secundarias puedes negarte en cualquier momento como se indica arriba.</p>
+<p>Si agendas después de conocer este aviso y no manifiestas lo contrario, consientes el tratamiento de tus datos para las finalidades necesarias (artículo 7 de la ley). Si agendas para un menor de edad, das ese consentimiento como su madre, padre o tutor. Para las secundarias puedes negarte en cualquier momento como se indica arriba.</p>
 <h2>9. Cambios a este aviso</h2>
 <p>Publicaremos cualquier cambio en ${url ? `<a href="${esc(url)}">${esc(url)}</a>` : 'nuestra página'}, con su fecha de actualización.</p>
 <p class="ley">Fundamento: Ley Federal de Protección de Datos Personales en Posesión de los Particulares, publicada en el Diario Oficial de la Federación el 20 de marzo de 2025.</p>`;
@@ -184,7 +189,7 @@ module.exports = (app, api, d) => {
   const avisoSimplificado = (x, url, pub) => `
 <h1>Aviso de privacidad simplificado</h1>
 <p class="sub">${esc(x.nombre)} · Última actualización: ${VERSION}</p>
-<p>${responsable(x, pub)}${domicilio(x, pub)}, usará tu nombre, tu WhatsApp y los datos de tus citas (servicio, barbero, fecha, hora, precio y asistencia) y, si creas una cuenta, tu contraseña cifrada, para <b>agendar y administrar tus citas, enviarte recordatorios y llevar tu historial de servicios</b>.</p>
+<p>${responsable(x, pub)}${domicilio(x, pub)}, usará tu nombre, tu WhatsApp y los datos de tus citas (servicio, barbero, fecha, hora, precio y asistencia) y, si creas una cuenta, tu contraseña cifrada, para <b>agendar y administrar tus citas, enviarte recordatorios y llevar tu historial de servicios</b>.${x.asistente ? ` Nuestro WhatsApp lo atiende un asistente con inteligencia artificial; tus mensajes se procesan con su proveedor (${esc(x.asistente)}) solo para responderte.` : ''}</p>
 <p>Si no te opones, también los usaremos para <b>enviarte promociones, felicitarte en tu cumpleaños y pedirte una reseña</b>. Para negarte, dinos "No quiero promociones" ${contacto(x, pub)}; tus citas no se verán afectadas.</p>
 <p>Consulta el aviso de privacidad integral en ${url ? `<a href="${esc(url)}">${esc(url)}</a>` : 'nuestra página'}.</p>`;
 
@@ -260,7 +265,7 @@ main{max-width:780px;margin:0 auto;padding:24px 18px 48px;background:#fff}h1{fon
     const hechos = PASOS.filter(p => F[p.id] && F[p.id].hecho).length;
     s.json({ aviso: AVISO, version: VERSION, total: PASOS.length, hechos, progreso: Math.round(hechos * 100 / PASOS.length),
       grupos: GRUPOS.map(g => ({ ...g, pasos: PASOS.filter(p => p.grupo === g.id).map(p => ({ ...p, hecho: !!(F[p.id] && F[p.id].hecho), nota: (F[p.id] && F[p.id].nota) || '', actualizado: (F[p.id] && F[p.id].actualizado) || null })) })),
-      docs: DOCS, privacidad: `/${q.neg.slug}/privacidad`, titular: x.titular, correo: x.correo, faltan: faltan(x), barberos: barberos(q.neg) });
+      docs: DOCS, privacidad: `/${q.neg.slug}/privacidad`, titular: x.titular, correo: x.correo, asistente: x.asistente, faltan: faltan(x), barberos: barberos(q.neg) });
   }));
 
   api.post('/admin/legal/paso', auth, wrap(async (q, s) => {
@@ -275,15 +280,17 @@ main{max-width:780px;margin:0 auto;padding:24px 18px 48px;background:#fff}h1{fon
     s.json({ ok: true, paso, hecho: r[0].hecho, hechos, total: PASOS.length, progreso: Math.round(hechos * 100 / PASOS.length) });
   }));
 
-  // Nombre completo o razón social del titular (el aviso de privacidad y el contrato deben identificar al responsable)
-  // y correo para temas de privacidad, que se publica en el aviso. Cada campo es opcional: el que no se manda se conserva.
+  // Nombre completo o razón social del titular (el aviso de privacidad y el contrato deben identificar al responsable),
+  // correo para temas de privacidad, que se publica en el aviso, y proveedor del asistente con IA del WhatsApp (vacío = no hay).
+  // Cada campo es opcional: el que no se manda se conserva.
   api.post('/admin/legal/datos', auth, wrap(async (q, s) => {
     const limpia = (v, n) => v === undefined || v === null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n);
-    const titular = limpia(q.body.titular, 120), correo = limpia(q.body.correo, 120);
+    const titular = limpia(q.body.titular, 120), correo = limpia(q.body.correo, 120), asistente = limpia(q.body.asistente, 80);
     if (correo && !correoOk(correo)) return s.status(400).json({ error: 'Escribe un correo válido o déjalo vacío' });
-    const r = await Q(`INSERT INTO legal_datos(negocio_id,titular,correo,actualizado) VALUES($1,COALESCE($2,''),COALESCE($3,''),now())
-      ON CONFLICT (negocio_id) DO UPDATE SET titular=COALESCE($2,legal_datos.titular), correo=COALESCE($3,legal_datos.correo), actualizado=now() RETURNING titular,correo`, [q.neg.id, titular, correo]);
-    s.json({ ok: true, titular: r[0].titular || '', correo: r[0].correo || '' });
+    const r = await Q(`INSERT INTO legal_datos(negocio_id,titular,correo,asistente,actualizado) VALUES($1,COALESCE($2,''),COALESCE($3,''),COALESCE($4,''),now())
+      ON CONFLICT (negocio_id) DO UPDATE SET titular=COALESCE($2,legal_datos.titular), correo=COALESCE($3,legal_datos.correo), asistente=COALESCE($4,legal_datos.asistente), actualizado=now()
+      RETURNING titular,correo,asistente`, [q.neg.id, titular, correo, asistente]);
+    s.json({ ok: true, titular: r[0].titular || '', correo: r[0].correo || '', asistente: r[0].asistente || '' });
   }));
 
   api.get('/admin/legal/doc/:tipo', auth, wrap(async (q, s) => {
