@@ -16,6 +16,7 @@ node --test --test-name-pattern="Stripe" test/billing.test.js # una prueba
 bash herramientas/probar.sh  # antes de publicar: reglas del repo, check, todas las pruebas y un recorrido en el navegador con capturas, sobre bases nuevas
 ```
 
+- Funciones grandes o con varias piezas: Spec Kit (`/speckit-specify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-implement`), con las reglas de `.specify/memory/constitution.md`.
 - Para mejoras pedidas en palabras ("que el cliente pueda pagar anticipo"), sigue `/mejorar-agenda` (`.claude/skills/mejorar-agenda/SKILL.md`): programar, probar con `herramientas/probar.sh`, enseñar capturas, publicar con aprobación y confirmar en línea.
 
 - El servidor **no lee `.env`**: carga las variables en la sesión antes de `npm start`/`npm test`. En PowerShell:
