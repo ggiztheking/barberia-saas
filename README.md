@@ -139,6 +139,12 @@ Segundo tema dibujado en el servidor (`tema-urbano.js` + `public/tema-urbano.css
 - **Muro de trabajos** justo después de la portada (`/:slug` pide hasta 13 trabajos con este tema): la primera foto ocupa 2×2 y se muestran 5, 9 o 13 fotos para que la rejilla quede completa en 4 columnas y en 2 (celular); con menos de 5 salen todas. Cada foto se amplía en un `<dialog>`. Con `instagram`, enlace a más trabajos.
 - Botón fijo "Agenda tu cita" en celular; la cinta de arriba se detiene con `prefers-reduced-motion`.
 
+## Páginas independientes (`public/p/<nombre>/`)
+
+Página estática de una barbería que todavía no tiene su cuenta en el SaaS, con el diseño del tema Urbano y sus fotos reales. Sale en `https://agendabarberias.xyz/p/<nombre>/` (los enlaces de barbería tienen 3 letras o más, así que `/p` nunca choca con uno). No tiene agenda en línea: todos los botones llevan a su WhatsApp. Cuando la barbería se registre, su página real es `/<slug>` y esta carpeta se puede borrar.
+
+- `p/yakinstyle/`: YakinStyle (Fernando Yakin). Sin precios, horario ni preguntas hasta tener los datos reales.
+
 ## Términos, privacidad y soporte del SaaS
 
 `sitio.js` sirve las páginas legales del propio servicio (las de cada barbería para sus clientes están en `legal.js`):
