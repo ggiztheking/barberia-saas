@@ -43,17 +43,17 @@ const dibuja = d => {
 <div class="wall">${muro.map(t => { const cap = `Corte${t.servicio ? ' ' + t.servicio : ''}${t.barbero ? ' de ' + t.barbero : ''}`;
     return `<button type="button" class="tile" data-src="/i/${Number(t.img)}" data-cap="${esc(cap)}" aria-label="Ampliar foto: ${esc(cap)}"><img src="/i/${Number(t.img)}" alt="${esc(cap)}" loading="lazy" decoding="async" width="600" height="800"></button>`; }).join('')}</div>
 ${ig ? `<a class="ghost" rel="noopener noreferrer" target="_blank" href="https://instagram.com/${esc(ig)}">Más trabajos en Instagram @${esc(ig)} ↗</a>` : ''}
-<dialog class="lightbox" id="lb"><button type="button" class="btn" id="lb-x">Cerrar ×</button><img id="lb-img" alt=""><p id="lb-cap"></p></dialog></section>` : '';
+<dialog class="lightbox" id="lb" aria-labelledby="lb-cap"><button type="button" class="btn" id="lb-x">Cerrar <span aria-hidden="true">×</span></button><img id="lb-img" alt=""><p id="lb-cap"></p></dialog></section>` : '';
 
   const tarjeta = (p, i) => `<article class="card${p.id === premium ? ' top' : ''}">${p.img ? `<img src="/i/${Number(p.img)}" alt="${esc(p.nombre)}" loading="lazy" decoding="async" width="600" height="750">` : ''}
 <p class="kicker">${String(i + 1).padStart(2, '0')}${p.etiqueta ? ' / ' + esc(String(p.etiqueta).toUpperCase()) : ''}</p><h3>${esc(p.nombre)}</h3><p class="price">${money(p.precio)}<small> MXN</small></p>
-<ul>${p.incluye.map(t => `<li>${esc(t)}</li>`).join('')}</ul><a class="btn" href="${agenda}?servicio=${p.id}">Reservar ${esc(p.nombre)} ↗</a>${extras.length ? `<button class="plain" type="button" data-elige="${p.id}">Agregar extras +</button>` : ''}</article>`;
+<ul>${p.incluye.map(t => `<li>${esc(t)}</li>`).join('')}</ul><a class="btn" href="${agenda}?servicio=${p.id}">Reservar ${esc(p.nombre)} ↗</a>${extras.length ? `<button class="plain" type="button" data-elige="${p.id}" aria-label="Agregar extras a ${esc(p.nombre)}">Agregar extras +</button>` : ''}</article>`;
 
   // Extras: el mismo personalizador del tema Estilo Internacional (marcaExtras), con el total antes de reservar.
   const personaliza = extras.length && paquetes.length ? `<div class="custom" id="personaliza"><div><p class="kicker">A TU MEDIDA</p><h3>Súmale algo.</h3><p>Agrega solo lo que tu servicio no incluye. El total final lo confirma la agenda.</p></div>
 <div class="choices"><label for="paquete">Tu servicio</label><select id="paquete">${paquetes.map(p => `<option value="${p.id}" data-precio="${+p.precio}" data-lavado="${p.lavado ? 1 : 0}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${money(p.precio)} MXN</option>`).join('')}</select>
 ${extras.map(e => `<label class="extra"><input type="checkbox" data-id="${e.id}" data-precio="${+e.precio}" data-lavado="${e.lavado ? 1 : 0}" data-nombre="${esc(e.nombre)}"><span>${esc(e.nombre)}</span><b>+${money(e.precio)}</b></label>`).join('')}
-<div class="total"><span>Total en MXN</span><strong id="total">${money(paquetes[0].precio)}</strong></div>
+<div class="total" aria-live="polite"><span>Total en MXN</span><strong id="total">${money(paquetes[0].precio)}</strong></div>
 <a class="btn" id="ir" href="${agenda}?servicio=${paquetes[0].id}">Reservar ↗</a>${n.whatsapp ? `<a class="ghost" id="wa" rel="noopener noreferrer" target="_blank" href="${esc(whatsappUrl)}">¿Prefieres reservar por WhatsApp?</a>` : ''}</div></div>` : '';
 
   const servicios = `<section class="sec alt" id="servicios"><div class="head"><p class="kicker">02 / SERVICIOS Y PRECIOS</p><h2>Elige tu corte.<br><em>Aparta tu silla.</em></h2>
@@ -84,7 +84,7 @@ ${paquetes.length ? `<div class="cards">${paquetes.map(tarjeta).join('')}</div>`
 <meta name="twitter:title" content="${esc(titulo)}"><meta name="twitter:description" content="${esc(descr)}">
 <link rel="manifest" href="/${slug}/manifest.json"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/tema-urbano.css?v=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/tema-urbano.css?v=2">
 ${hero ? `<link rel="preload" as="image" href="${esc(hero)}" fetchpriority="high">` : ''}
 ${ld.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('\n')}</head><body>
 <a class="skip" href="#servicios">Saltar a servicios y precios</a>
@@ -112,7 +112,7 @@ cobra.forEach(function(c){s+=+c.dataset.precio;ids.push(c.dataset.id);nom.push(c
 tot.textContent='$'+s;ir.href=A+'?servicio='+o.value+(ids.length?'&extras='+ids.join(','):'');ir.firstChild.nodeValue='Reservar · $'+s+' ↗';
 if(wa&&W){var t='Hola, quiero reservar en '+N+'. Servicio: '+o.dataset.nombre+' ($'+o.dataset.precio+' MXN).'+(nom.length?' Extras: '+nom.join(', ')+'.':'')+' ¿Qué horarios tienen disponibles?';wa.href=W.split('?text=')[0]+'?text='+encodeURIComponent(t)}}
 sel.onchange=pinta;cajas.forEach(function(c){c.onchange=pinta});pinta(true);
-$$('[data-elige]').forEach(function(b){b.onclick=function(){sel.value=b.dataset.elige;pinta();$('#personaliza').scrollIntoView({behavior:'smooth',block:'center'})}})}
+$$('[data-elige]').forEach(function(b){b.onclick=function(){sel.value=b.dataset.elige;pinta();$('#personaliza').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});sel.focus({preventScroll:true})}})}
 var lb=$('#lb');if(lb){$$('.tile').forEach(function(b){b.onclick=function(){$('#lb-img').src=b.dataset.src;$('#lb-img').alt=b.dataset.cap;$('#lb-cap').textContent=b.dataset.cap;lb.showModal()}});
 $('#lb-x').onclick=function(){lb.close()};lb.onclick=function(e){if(e.target===lb)lb.close()}}
 if('serviceWorker' in navigator)addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})();
