@@ -143,7 +143,7 @@ Segundo tema dibujado en el servidor (`tema-urbano.js` + `public/tema-urbano.css
 
 Página estática de una barbería que todavía no tiene su cuenta en el SaaS, con el diseño del tema Urbano y sus fotos reales. Sale en `https://agendabarberias.xyz/p/<nombre>/` (los enlaces de barbería tienen 3 letras o más, así que `/p` nunca choca con uno). No tiene agenda en línea: todos los botones llevan a su WhatsApp. Cuando la barbería se registre, su página real es `/<slug>` y esta carpeta se puede borrar.
 
-- `p/yakinstyle/`: YakinStyle (Fernando Yakin). Sin precios, horario ni preguntas hasta tener los datos reales.
+- `p/yakinstyle/`: YakinStyle (Fernando Yakin). Muro de fotos, 6 videos reales en `video/` (se descargan solo al tocar play; sin los de niños) y "Lo que hacemos". Sin precios, horario ni preguntas hasta tener los datos reales.
 
 ## Términos, privacidad y soporte del SaaS
 
