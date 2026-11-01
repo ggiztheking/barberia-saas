@@ -303,3 +303,5 @@ module.exports = dibuja;
 module.exports.estadoAhora = estadoAhora; // para probar el cálculo de abierto/cerrado con horas fijas
 module.exports.logoDe = logoDe; // el mismo logo para /info (agenda) y el manifiesto de la app
 module.exports.fotosTema = () => [...HAY]; // fotos ilustrativas disponibles (las que existen en public/img/tema)
+// Utilidades que también usa el tema Urbano (tema-urbano.js): el horario, el abierto/cerrado y los extras salen de la misma regla.
+module.exports.util = { esc, money, json, NUM, DIAS, resumen, telBonito, horarioAgenda, citasEnLinea, marcaExtras };

@@ -860,10 +860,11 @@ app.get('/sitemap.xml', wrap(async (q, s) => {
   const base = `${q.protocol}://${q.get('host')}`, r = (await pool.query('SELECT slug,activo,vence FROM negocios')).rows.filter(vigente);
   s.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ['', '/en', '/registro', '/terminos', '/privacidad', ...r.flatMap(x => ['/' + encodeURIComponent(x.slug), '/' + encodeURIComponent(x.slug) + '/privacidad'])].map(u => `<url><loc>${base}${u}</loc></url>`).join('') + '</urlset>');
 }));
-const temaEI = require('./tema-ei');
-const paginaEI = async (q, n) => {
+const temaEI = require('./tema-ei'), temaUrbano = require('./tema-urbano');
+// Página dibujada en el servidor para los temas 'ei' (Estilo Internacional) y 'urbano': mismos datos, distinto diseño.
+const paginaTema = async (q, n) => {
   const [cat, referencias, servicios, trabajos, preguntas, portada] = await Promise.all([paq.catalogo(n.id), paq.referencias(n.id), paq.servicios(n.id),
-    pool.query(SQL_TRAB + ' ORDER BY t.id DESC LIMIT 8', [n.id]).then(r => r.rows), pool.query('SELECT pregunta,respuesta FROM preguntas WHERE negocio_id=$1 ORDER BY orden,id', [n.id]).then(r => r.rows),
+    pool.query(SQL_TRAB + ' ORDER BY t.id DESC LIMIT ' + (n.tema === 'urbano' ? 13 : 8), [n.id]).then(r => r.rows), pool.query('SELECT pregunta,respuesta FROM preguntas WHERE negocio_id=$1 ORDER BY orden,id', [n.id]).then(r => r.rows),
     pool.query("SELECT id FROM imagenes WHERE negocio_id=$1 AND tipo='portada'", [n.id]).then(r => r.rows[0])]);
   const paquetes = cat.paquetes.length ? cat.paquetes : servicios.map(x => ({ id: x.id, nombre: x.nombre, precio: x.precio, etiqueta: '', incluye: [x.descripcion || x.nombre], lavado: false }));
   const whatsappUrl = n.whatsapp ? 'https://wa.me/' + wa(n.whatsapp) + '?text=' + encodeURIComponent(`Hola, quiero reservar en ${n.nombre}. ¿Qué horarios tienen disponibles?`) : '';
@@ -874,14 +875,14 @@ const paginaEI = async (q, n) => {
     pool.query('SELECT cada,premio FROM lealtad_config WHERE negocio_id=$1 AND activo AND premio IS NOT NULL', [n.id]).then(r => r.rows[0] || null).catch(() => null)]);
   const P = Object.fromEntries(perf.map(x => [x.barbero, x])), F = Object.fromEntries(fotosB.map(x => [x.ref, x.id]));
   const equipo = bars(n).map(b => ({ nombre: b, especialidad: (P[b] || {}).especialidad || '', bio: (P[b] || {}).bio || '', instagram: (P[b] || {}).instagram || '', foto: F[b] || null }));
-  return temaEI({ n, base: `${q.protocol}://${q.get('host')}`, paquetes, extras: cat.extras, referencias, trabajos, preguntas, portada: portada && portada.id, abierto: vigente(n), whatsappUrl, equipo, lealtad: leal });
+  return (n.tema === 'urbano' ? temaUrbano : temaEI)({ n, base: `${q.protocol}://${q.get('host')}`, paquetes, extras: cat.extras, referencias, trabajos, preguntas, portada: portada && portada.id, abierto: vigente(n), whatsappUrl, equipo, lealtad: leal });
 };
 const NEG = fs.readFileSync(__dirname + '/public/negocio.html', 'utf8');
 const he = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // La landing sale con título, descripción y vista previa (WhatsApp, Google) ya puestos por el servidor.
 app.get('/:slug', existe, wrap(async (q, s) => {
   const n = (await pool.query('SELECT * FROM negocios WHERE slug=$1', [q.params.slug])).rows[0];
-  if (n.tema === 'ei') return s.type('html').send(await paginaEI(q, n));
+  if (n.tema === 'ei' || n.tema === 'urbano') return s.type('html').send(await paginaTema(q, n));
   const t = he(/barber/i.test(n.nombre) ? n.nombre : n.nombre + ' · Barbería'), base = `${q.protocol}://${q.get('host')}`, url = `${base}/${encodeURIComponent(q.params.slug)}`;
   const d = he(`Agenda tu cita en línea en ${n.nombre}${n.direccion ? ', ' + n.direccion : ''}. Cortes clásicos y las tendencias más nuevas, con el barbero que tú elijas.`);
   const meta = `<meta property="og:url" content="${url}"><link rel="canonical" href="${url}">${n.fotos ? `<meta property="og:image" content="${base}/img/hero.jpg"><meta name="twitter:card" content="summary_large_image">` : ''}`;

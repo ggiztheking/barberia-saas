@@ -130,6 +130,15 @@ El diseño del sitio de Estilo Internacional es un tema del SaaS (`tema-ei.js` +
 - **Logo (Estilo Internacional):** con `fotos`, la página usa su medallón (`public/img/logo-ei.webp`: el círculo del logo original, con el aro dorado cerrado y fondo transparente) en lugar de las iniciales, en el encabezado y en el pie; su favicon y su apple-touch-icon son `logo-ei-192.png` / `logo-ei-180.png` (cuadrados crema), y el JSON-LD lleva `logo` (`logo-ei-512.png`). `GET /api/:slug/info` devuelve `logo`, `logo_icono` y `logo_apple` (null sin logo) para que la agenda muestre el medallón junto al nombre y cambie su ícono, y `/<slug>/manifest.json` usa `logo-ei-192/512.png` (también como maskable) con fondo y tema crema `#f1efe9`. Al reemplazar esos archivos, sube `LV` en `tema-ei.js`.
 - Las referencias de estilo se editan desde Panel → Página, y la agenda puede ser cada 30 minutos y abrir a la media hora (ver las secciones más abajo).
 
+## Página pública: tema "Urbano"
+
+Segundo tema dibujado en el servidor (`tema-urbano.js` + `public/tema-urbano.css`), pensado para barberías de diseños, freestyle y fades (la primera es YakinStyle). Se elige igual que el otro: pestaña **Página** → "Diseño de tu página" → **Urbano (negro y dorado, para diseños y fades)**.
+
+- **Mismos datos y reglas que "Estilo Internacional":** paquetes (o servicios si no hay paquetes), extras con el mismo personalizador (`marcaExtras`), equipo, tarjeta de sellos, preguntas, reseña, abierto/cerrado y horario de citas en línea. Esas utilidades salen de `tema-ei.js` (`module.exports.util` y `estadoAhora`), no se duplican.
+- **Las fotos reales mandan:** no usa imágenes ilustrativas de IA ni archivos del tema de Estilo Internacional. La portada es la que subió el dueño; si no hay, su trabajo más reciente; si tampoco, un fondo oscuro con el hexágono de neón.
+- **Muro de trabajos** justo después de la portada (`/:slug` pide hasta 13 trabajos con este tema): la primera foto ocupa 2×2 y se muestran 5, 9 o 13 fotos para que la rejilla quede completa en 4 columnas y en 2 (celular); con menos de 5 salen todas. Cada foto se amplía en un `<dialog>`. Con `instagram`, enlace a más trabajos.
+- Botón fijo "Agenda tu cita" en celular; la cinta de arriba se detiene con `prefers-reduced-motion`.
+
 ## Términos, privacidad y soporte del SaaS
 
 `sitio.js` sirve las páginas legales del propio servicio (las de cada barbería para sus clientes están en `legal.js`):

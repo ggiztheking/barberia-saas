@@ -122,7 +122,7 @@ module.exports = (app, api, d) => {
     s.json({ id: (await pool.query('INSERT INTO extras(negocio_id,nombre,precio,lavado,orden) VALUES($1,$2,$3,$4,(SELECT COALESCE(MAX(orden),0)+1 FROM extras WHERE negocio_id=$1)) RETURNING id', [q.neg.id, nombre, precio, !!b.lavado])).rows[0].id });
   }));
   // Tema de la página pública: 'ei' (Estilo Internacional, claro) o 'oscuro' (el anterior, que se guarda como NULL).
-  const TEMAS = [['oscuro', 'Oscuro y dorado'], ['ei', 'Estilo Internacional (claro)']];
+  const TEMAS = [['oscuro', 'Oscuro y dorado'], ['ei', 'Estilo Internacional (claro)'], ['urbano', 'Urbano (negro y dorado, para diseños y fades)']];
   api.get('/admin/tema', auth, (q, s) => s.json({ tema: q.neg.tema || 'oscuro', temas: TEMAS.map(([id, nombre]) => ({ id, nombre })) }));
   api.post('/admin/tema', auth, wrap(async (q, s) => {
     if (!TEMAS.some(([id]) => id === q.body.tema)) return s.status(400).json({ error: 'Ese tema no existe' });
