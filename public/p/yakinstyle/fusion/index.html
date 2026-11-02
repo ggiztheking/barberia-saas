@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Inter:wght@400;600;700&display=swap">
 <link rel="preload" as="image" href="img/hero.jpg" fetchpriority="high">
-<!-- DATOS REALES: cuando el dueño los mande, agregar al JSON-LD "openingHoursSpecification" (horario), "geo"/"hasMap" (mapa) y "sameAs": ["https://www.instagram.com/…"] (Instagram). No rellenar antes. -->
+<!-- DATOS REALES: falta "sameAs": ["https://www.instagram.com/…"] (Instagram) cuando el dueño lo mande. No rellenar antes. -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -38,21 +38,30 @@
   "name": "YakinStyle",
   "url": "https://agendabarberias.xyz/p/yakinstyle/",
   "image": ["https://agendabarberias.xyz/p/yakinstyle/fusion/img/og.jpg", "https://agendabarberias.xyz/p/yakinstyle/fusion/img/hero-1086.webp"],
-  "description": "Barbería en Mérida, Yucatán. Diseños freestyle a mano alzada, fades, diseños con color, tapers, rizos, texturizados y perfilado con navaja.",
+  "description": "Barbería en Mérida, Yucatán. Diseños freestyle a mano alzada, fades, diseños con color, tapers, rizos, texturizados, perfilado con navaja, corte clásico, barba y cejas.",
   "telephone": "+52 999 550 2242",
   "email": "yakin.dc77@gmail.com",
   "address": {"@type": "PostalAddress", "streetAddress": "Calle 12, Av. Fidel Velázquez, Col. Melchor Ocampo", "postalCode": "97165", "addressLocality": "Mérida", "addressRegion": "Yucatán", "addressCountry": "MX"},
   "hasMap": "https://www.google.com/maps/search/?api=1&query=Calle%2012%2C%20Avenida%20Fidel%20Vel%C3%A1zquez%2C%20Melchor%20Ocampo%2C%2097165%20M%C3%A9rida%2C%20Yucat%C3%A1n%2C%20M%C3%A9xico",
   "areaServed": {"@type": "City", "name": "Mérida"},
-  "founder": {"@type": "Person", "name": "Fernando Yakin", "jobTitle": "Barbero"},
+  "founder": {"@type": "Person", "name": "Fernando Yakin Dueñas Campos", "jobTitle": "Barbero"},
+  "employee": [{"@type": "Person", "name": "Fernando Yakin Dueñas Campos", "jobTitle": "Barbero"}, {"@type": "Person", "name": "Darvelio", "jobTitle": "Barbero"}],
+  "openingHoursSpecification": [
+    {"@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], "opens": "10:00", "closes": "20:00"},
+    {"@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "10:00", "closes": "17:00"}
+  ],
+  "priceRange": "$30–$180 MXN",
   "makesOffer": [
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Diseños freestyle"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fades"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Diseños con color"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Tapers"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Cortes para rizos"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Texturizados"}},
-    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Perfilado con navaja"}}
+    {"@type": "Offer", "priceSpecification": {"@type": "PriceSpecification", "minPrice": "80", "maxPrice": "100", "priceCurrency": "MXN"}, "itemOffered": {"@type": "Service", "name": "Diseños freestyle"}},
+    {"@type": "Offer", "price": "180", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Fades"}},
+    {"@type": "Offer", "price": "100", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Diseños con color"}},
+    {"@type": "Offer", "price": "170", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Tapers"}},
+    {"@type": "Offer", "price": "180", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Cortes para rizos"}},
+    {"@type": "Offer", "price": "180", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Texturizados"}},
+    {"@type": "Offer", "price": "150", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Perfilado con navaja"}},
+    {"@type": "Offer", "price": "170", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Corte clásico"}},
+    {"@type": "Offer", "price": "150", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Barba"}},
+    {"@type": "Offer", "price": "30", "priceCurrency": "MXN", "itemOffered": {"@type": "Service", "name": "Cejas"}}
   ]
 }
 </script>
@@ -633,17 +642,20 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
       <div class="sec-head rv">
         <p class="num">04 — Servicios</p>
         <h2 id="t-servicios">Lo que sale de esta <em>silla.</em></h2>
-        <p>Elige tu estilo y escríbele directo a Fernando. Te confirma precio y horario por WhatsApp.</p>
+        <p>Elige tu estilo y escríbele directo a Fernando. Te confirma tu lugar por WhatsApp.</p>
       </div>
-      <!-- PRECIO: cuando el dueño mande precios, llenar el <span class="precio" hidden data-dato="precio-…"> de cada tarjeta (por ejemplo «Desde $___») y quitarle el atributo hidden. No inventar precios. -->
+      <!-- PRECIO: precios reales enviados por el dueño (nov 2026). -->
       <ul class="svc">
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20dise%C3%B1o%20freestyle.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">01</span><div><h3>Diseños freestyle</h3><p>Líneas, curvas y figuras trazadas a mano alzada con máquina y navaja. Tú traes la idea; aquí se dibuja.</p><span class="precio" hidden data-dato="precio-freestyle"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20fade.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">02</span><div><h3>Fades</h3><p>Degradado limpio, del ras a la altura que pidas, para un corte que se nota desde lejos.</p><span class="precio" hidden data-dato="precio-fade"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20dise%C3%B1o%20con%20color.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">03</span><div><h3>Diseños con color</h3><p>Diseño de líneas combinado con cabello pintado, para un look que no pasa desapercibido.</p><span class="precio" hidden data-dato="precio-color"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20taper.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">04</span><div><h3>Tapers</h3><p>Contorno afilado en patillas y nuca que se desvanece sin quitarte el largo de arriba.</p><span class="precio" hidden data-dato="precio-taper"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20para%20cabello%20rizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">05</span><div><h3>Rizos</h3><p>Corte para cabello rizado que respeta tu textura: limpio abajo, con forma arriba.</p><span class="precio" hidden data-dato="precio-rizos"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20texturizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">06</span><div><h3>Texturizados</h3><p>Movimiento y textura arriba para un acabado natural y fácil de peinar.</p><span class="precio" hidden data-dato="precio-texturizado"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
-        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20perfilado%20con%20navaja.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">07</span><div><h3>Perfilado con navaja</h3><p>Contornos y líneas marcadas con navaja para un acabado nítido.</p><span class="precio" hidden data-dato="precio-navaja"></span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20dise%C3%B1o%20freestyle.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">01</span><div><h3>Diseños freestyle</h3><p>Líneas, curvas y figuras trazadas a mano alzada con máquina y navaja. Tú traes la idea; aquí se dibuja.</p><span class="precio" data-dato="precio-freestyle">$80 a $100 según el diseño</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20fade.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">02</span><div><h3>Fades</h3><p>Degradado limpio, del ras a la altura que pidas, para un corte que se nota desde lejos.</p><span class="precio" data-dato="precio-fade">$180</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20dise%C3%B1o%20con%20color.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">03</span><div><h3>Diseños con color</h3><p>Diseño de líneas combinado con cabello pintado, para un look que no pasa desapercibido.</p><span class="precio" data-dato="precio-color">$100</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20taper.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">04</span><div><h3>Tapers</h3><p>Contorno afilado en patillas y nuca que se desvanece sin quitarte el largo de arriba.</p><span class="precio" data-dato="precio-taper">$170</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20para%20cabello%20rizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">05</span><div><h3>Rizos</h3><p>Corte para cabello rizado que respeta tu textura: limpio abajo, con forma arriba.</p><span class="precio" data-dato="precio-rizos">$180</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20texturizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">06</span><div><h3>Texturizados</h3><p>Movimiento y textura arriba para un acabado natural y fácil de peinar.</p><span class="precio" data-dato="precio-texturizado">$180</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20perfilado%20con%20navaja.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">07</span><div><h3>Perfilado con navaja</h3><p>Contornos y líneas marcadas con navaja para un acabado nítido.</p><span class="precio" data-dato="precio-navaja">$150</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20cl%C3%A1sico.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">08</span><div><h3>Corte clásico</h3><p>El corte de siempre, limpio y bien terminado.</p><span class="precio" data-dato="precio-clasico">$170</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20arreglarme%20la%20barba.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">09</span><div><h3>Barba</h3><p>Arreglo de barba con contorno marcado.</p><span class="precio" data-dato="precio-barba">$150</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
+        <li class="rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20arreglarme%20las%20cejas.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><span class="n" aria-hidden="true">10</span><div><h3>Cejas</h3><p>Limpieza y forma de cejas.</p><span class="precio" data-dato="precio-cejas">$30</span></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
         <li class="more rv"><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20tengo%20una%20idea%20de%20dise%C3%B1o%20y%20te%20mando%20foto.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer"><div><h3>¿Traes otra idea?</h3><p>Mándale foto o captura de lo que quieres y te dice cómo queda en tu cabeza.</p></div><span class="go" aria-hidden="true"><svg><use href="#i-wa"/></svg></span><span class="sr"> (abre WhatsApp)</span></a></li>
       </ul>
       <p class="svc-note"><svg aria-hidden="true"><use href="#i-chat"/></svg><span>Cada botón abre WhatsApp con tu mensaje ya escrito. Solo dale enviar.</span></p>
@@ -662,17 +674,18 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
       <div class="firma-copy rv">
         <p class="num">05 — El barbero</p>
         <h2 id="t-barbero">Fernando <em>Yakin.</em></h2>
-        <p class="quote">Dueño, barbero y el de los <em>trazos.</em></p>
-        <p>En YakinStyle corta y diseña <strong>Fernando Yakin</strong>, dueño y barbero. Su sello es el freestyle: líneas, curvas y figuras que traza a mano alzada con máquina y navaja.</p>
+        <p class="quote">8 años cortando. Dueño, barbero y el de los <em>trazos.</em></p>
+        <p>En YakinStyle cortan <strong>Fernando Yakin Dueñas Campos</strong>, dueño y barbero, y <strong>Darvelio</strong>, barbero. El sello de Fernando es el freestyle: líneas, curvas y figuras que traza a mano alzada con máquina y navaja.</p>
         <p>Platícale tu idea por WhatsApp y llegas con el diseño en mente. Lo demás se dibuja en la silla.</p>
         <dl class="ficha">
+          <div><dt>Barberos</dt><dd>Fernando Yakin Dueñas Campos y Darvelio</dd></div>
           <div><dt>Especialidad</dt><dd>Diseños freestyle a mano alzada</dd></div>
-          <div><dt>También</dt><dd>Fades, tapers, rizos, texturizados, diseños con color y perfilado con navaja</dd></div>
-          <div><dt>Dónde</dt><dd>Calle 12, Av. Fidel Velázquez, Col. Melchor Ocampo, 97165 Mérida, Yuc.</dd></div>
+          <div><dt>También</dt><dd>Fades, tapers, rizos, texturizados, diseños con color, perfilado con navaja, corte clásico, barba y cejas</dd></div>
+          <div><dt>Dónde</dt><dd>Calle 12, Av. Fidel Velázquez, Col. Melchor Ocampo, 97165 Mérida, Yuc. A un lado de la parada del Va y Ven.</dd></div>
           <div><dt>Correo</dt><dd><a href="mailto:yakin.dc77@gmail.com">yakin.dc77@gmail.com</a></dd></div>
-          <div><dt>Cómo agendar</dt><dd>Por WhatsApp, directo con Fernando</dd></div>
-          <!-- AGREGAR CUANDO LLEGUEN (y quitar hidden): horario e Instagram reales del dueño -->
-          <div hidden data-dato="horario"><dt>Horario</dt><dd></dd></div>
+          <div><dt>Cómo agendar</dt><dd>Con cita por WhatsApp o sin cita, llegando al local</dd></div>
+          <!-- INSTAGRAM: agregar (y quitar hidden) cuando el dueño lo mande -->
+          <div data-dato="horario"><dt>Horario</dt><dd>Lunes a sábado de 10:00 a 20:00 · Domingo de 10:00 a 17:00</dd></div>
           <div hidden data-dato="instagram"><dt>Instagram</dt><dd></dd></div>
         </dl>
       </div>
@@ -693,9 +706,9 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
         <h2 id="t-local">Bajo las luces <em>hexagonales.</em></h2>
         <p>Así se ve donde te vas a sentar: techo de LED en panal, sillones con capa negro con dorado y la máquina lista.</p>
         <ul class="facts">
-          <li><svg aria-hidden="true"><use href="#i-pin"/></svg><div><b>Calle 12, Av. Fidel Velázquez</b><span>Col. Melchor Ocampo, 97165 Mérida, Yuc.</span></div></li>
-          <li><svg aria-hidden="true"><use href="#i-chat"/></svg><div><b>Con cita por WhatsApp</b><span>Escribe, aparta tu lugar y llega a tu hora.</span></div></li>
-          <li><svg aria-hidden="true"><use href="#i-light"/></svg><div><b>Atiende Fernando Yakin</b><span>Dueño y barbero de YakinStyle.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-pin"/></svg><div><b>Calle 12, Av. Fidel Velázquez</b><span>Col. Melchor Ocampo, 97165 Mérida, Yuc. A un lado de la parada del Va y Ven.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-chat"/></svg><div><b>Con cita o sin cita</b><span>Aparta por WhatsApp o llega directo. Lunes a sábado 10:00–20:00, domingo 10:00–17:00.</span></div></li>
+          <li><svg aria-hidden="true"><use href="#i-light"/></svg><div><b>Atienden Fernando Yakin y Darvelio</b><span>Fernando es el dueño; Darvelio, barbero de la casa.</span></div></li>
         </ul>
         <div hidden data-dato="mapa"><!-- MAPA: aquí va el iframe o enlace de Google Maps con la dirección real --></div>
         <figure class="capa">
@@ -716,7 +729,7 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
       <ol class="steps rv">
         <li><b>Escríbele por WhatsApp</b><span>Toca cualquier botón dorado y el mensaje ya va escrito.</span></li>
         <li><b>Mándale tu idea</b><span>Una foto, una captura o solo descríbele el diseño que traes en mente.</span></li>
-        <li><b>Te confirma horario y precio</b><span>Llegas a la hora que quedaron y directo a la silla.</span></li>
+        <li><b>Te confirma tu lugar</b><span>Llegas a la hora que quedaron y directo a la silla.</span></li>
       </ol>
     </div>
   </section>
@@ -726,7 +739,7 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
       <svg class="crown" viewBox="0 0 116 100" aria-hidden="true" focusable="false"><polygon points="29,6 87,6 110,50 87,94 29,94 6,50"/></svg>
       <p class="kicker">Agenda tu lugar</p>
       <h2 id="t-final">¿Qué te vas <em class="glow">a dibujar?</em></h2>
-      <p class="lead">Escríbele a Fernando, cuéntale tu idea y aparta tu lugar. Precio y horario te los confirma por WhatsApp.</p>
+      <p class="lead">Escríbele a Fernando, cuéntale tu idea y aparta tu lugar. Te lo confirma por WhatsApp.</p>
       <ul class="chips" aria-label="Mensajes rápidos por WhatsApp">
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20dise%C3%B1o%20freestyle.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Freestyle<span class="sr"> (abre WhatsApp)</span></a></li>
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20fade.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Fade<span class="sr"> (abre WhatsApp)</span></a></li>
@@ -735,6 +748,9 @@ h2 em.glow{color:var(--neon);text-shadow:var(--glow)}
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20para%20cabello%20rizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Rizos<span class="sr"> (abre WhatsApp)</span></a></li>
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20texturizado.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Texturizado<span class="sr"> (abre WhatsApp)</span></a></li>
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20perfilado%20con%20navaja.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Navaja<span class="sr"> (abre WhatsApp)</span></a></li>
+        <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20un%20corte%20cl%C3%A1sico.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Clásico<span class="sr"> (abre WhatsApp)</span></a></li>
+        <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20arreglarme%20la%20barba.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Barba<span class="sr"> (abre WhatsApp)</span></a></li>
+        <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20quiero%20arreglarme%20las%20cejas.%20%C2%BFQu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Cejas<span class="sr"> (abre WhatsApp)</span></a></li>
         <li><a href="https://wa.me/529995502242?text=Hola%20Fernando%2C%20todav%C3%ADa%20no%20s%C3%A9%20qu%C3%A9%20corte%20hacerme.%20%C2%BFMe%20ayudas%20a%20elegir%20y%20qu%C3%A9%20horarios%20tienes%3F" target="_blank" rel="noopener noreferrer">Aún no sé<span class="sr"> (abre WhatsApp)</span></a></li>
       </ul>
       <div class="cta-row">
