@@ -21,7 +21,7 @@ module.exports = (app, d) => {
 
   const pagina = (titulo, desc, cuerpo) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(titulo)} · Agenda de Barberías</title><meta name="description" content="${esc(desc)}"><meta name="robots" content="index, follow"><meta name="theme-color" content="#07090f">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=18">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/s.css?v=21">
 <style>main{max-width:760px}main h2{margin-top:34px}main li{margin:6px 0}main a{color:var(--gold)}.v{color:var(--dim);font-size:14px}</style></head><body>
 <header><a class="logo" href="/" style="text-decoration:none">AGENDA DE BARBERÍAS</a></header><main>
 <h1>${esc(titulo)}</h1><p class="v">Última actualización: ${VERSION}</p>${cuerpo}

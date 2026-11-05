@@ -1,7 +1,9 @@
 /* La agenda con el tema "Estilo Internacional" (claro): mismos colores y tipografías que la página pública. */
 /* --precio: el naranja de la marca oscurecido para textos sobre crema (5.2:1 sobre --bg y 4.65:1 sobre --panel; #cc7232 daba 2.71:1).
    --gold se queda igual: lo usan los botones, bordes y chips elegidos. */
-:root { --bg: #f1efe9; --panel: #e4e3dc; --ink: #181a19; --dim: #5e615b; --gold: #cc7232; --precio: #9a4f1c; --error: #a3341f; --line: #d5d4cb; color-scheme: light; }
+:root { --color-fondo: #f1efe9; --color-superficie: #e4e3dc; --color-texto: #181a19; --color-texto-suave: #5e615b; --color-marca: #cc7232; --color-marca-texto: #9a4f1c; --color-borde: #d5d4cb;
+  /* Los nombres cortos se dejan con su valor (las pruebas de contraste los leen así). --color-error de s.css no se cambia aquí todavía: aclararía fondos de avisos. */
+  --bg: #f1efe9; --panel: #e4e3dc; --ink: #181a19; --dim: #5e615b; --gold: #cc7232; --precio: #9a4f1c; --error: #a3341f; --line: #d5d4cb; color-scheme: light; }
 body { font-family: 'DM Sans', system-ui, sans-serif; font-weight: 400; }
 h1, h2, h3, .logo, .barra .res b, .barra .tot b { font-family: Manrope, system-ui, sans-serif; font-weight: 700; letter-spacing: -.04em; }
 .logo { letter-spacing: .12em; font-size: 20px; text-transform: uppercase; }

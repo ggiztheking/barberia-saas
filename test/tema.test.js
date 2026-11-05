@@ -319,7 +319,7 @@ test('horario de citas en línea junto al horario del local (mismo formato que l
   assert.ok(!sinTexto.includes('Citas en línea'));
   // Si la barbería no recibe citas en línea, no se anuncian.
   assert.deepEqual(citas(pagina({ horario_texto: '9:30 AM a 11:00 PM' }, { abierto: false })), []);
-  assert.ok(conTexto.includes('/tema-ei.css?v=7'), 'la hoja de estilos nueva no sale de la caché');
+  assert.ok(conTexto.includes('/tema-ei.css?v=8'), 'la hoja de estilos nueva no sale de la caché');
 });
 
 test('la línea de citas en línea coincide con los espacios que da la agenda del servidor', { skip: sinBase }, async () => {
@@ -339,7 +339,9 @@ test('tema-ei.css: el naranja de texto sobre fondo claro tiene contraste ≥4.5:
   const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'tema-ei.css'), 'utf8');
   const L = hex => { const c = hex.match(/[0-9a-f]{2}/gi).map(x => parseInt(x, 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   const contraste = (a, b) => { const [x, y] = [L(a), L(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-  const texto = css.match(/--accent-text:\s*(#[0-9a-f]{6})/i)[1];
+  // --accent-text es alias de --color-marca-texto (variables de diseño comunes a todos los temas).
+  assert.match(css, /--accent-text:\s*var\(--color-marca-texto\)/);
+  const texto = css.match(/--color-marca-texto:\s*(#[0-9a-f]{6})/i)[1];
   for (const fondo of ['#f1efe9', '#e7e4da', '#e4e3dc']) assert.ok(contraste(texto, fondo) >= 4.5, `${texto} sobre ${fondo}: ${contraste(texto, fondo).toFixed(2)}`);
   // Ningún texto (color:) usa el naranja claro #cc7232; el contorno de foco y los fondos naranja no son texto.
   assert.ok(!/(?:^|[;{\s])color:\s*#cc7232/i.test(css), 'texto con #cc7232');
